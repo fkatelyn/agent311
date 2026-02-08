@@ -1,5 +1,6 @@
 import json
 import uuid
+from pathlib import Path
 
 from claude_agent_sdk import (
     ClaudeSDKClient,
@@ -7,8 +8,6 @@ from claude_agent_sdk import (
     AssistantMessage,
     TextBlock,
     ToolUseBlock,
-    tool,
-    create_sdk_mcp_server,
 )
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -46,24 +45,6 @@ You can discuss:
 Be helpful, accurate, and enthusiastic about Austin's civic data!"""
 
 
-# Define hello_world tool (agent311-exclusive via SDK MCP server)
-@tool(
-    "hello_world",
-    "A simple test tool that returns a greeting message. Use when the user asks to test tools or run hello world.",
-    {"name": str},
-)
-async def hello_world(args):
-    name = args.get("name", "there")
-    return {
-        "content": [
-            {"type": "text", "text": f"Hello, {name}! Tool calling is working!"}
-        ]
-    }
-
-
-agent311_tools = create_sdk_mcp_server(name="agent311", tools=[hello_world])
-
-
 async def _stream_chat(messages: list):
     """Stream chat responses using Claude Agent SDK."""
     msg_id = str(uuid.uuid4())
@@ -89,8 +70,9 @@ async def _stream_chat(messages: list):
 
     options = ClaudeAgentOptions(
         system_prompt=system_prompt,
-        mcp_servers={"agent311": agent311_tools},
-        allowed_tools=["mcp__agent311__hello_world"],
+        cwd=str(Path(__file__).parent),
+        setting_sources=["project"],
+        allowed_tools=["Skill", "Read", "Write", "Edit", "Bash", "Task", "WebSearch", "WebFetch"],
         permission_mode="acceptEdits",
         max_turns=5,
     )
