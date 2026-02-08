@@ -1,8 +1,13 @@
 import json
-import os
 import uuid
 
-from anthropic import AsyncAnthropic
+from claude_agent_sdk import (
+    ClaudeSDKClient,
+    ClaudeAgentOptions,
+    StreamEvent,
+    tool,
+    create_sdk_mcp_server,
+)
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
@@ -15,9 +20,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# Initialize Anthropic client
-client = AsyncAnthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
 
 SYSTEM_PROMPT = """You are Agent 311, an AI assistant specializing in Austin 311 service request data.
 
@@ -41,138 +43,84 @@ You can discuss:
 
 Be helpful, accurate, and enthusiastic about Austin's civic data!"""
 
-TOOLS = [
-    {
-        "name": "hello_world",
-        "description": "A simple test tool that returns a greeting message. Use this when the user asks to test tools, run hello world, or demo the skill system.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "name": {
-                    "type": "string",
-                    "description": "Optional name to include in the greeting"
-                }
-            }
-        }
+
+# Define hello_world tool (agent311-exclusive via SDK MCP server)
+@tool(
+    "hello_world",
+    "A simple test tool that returns a greeting message. Use when the user asks to test tools or run hello world.",
+    {"name": str},
+)
+async def hello_world(args):
+    name = args.get("name", "there")
+    return {
+        "content": [
+            {"type": "text", "text": f"Hello, {name}! Tool calling is working!"}
+        ]
     }
-]
 
 
-def execute_tool(tool_name: str, tool_input: dict) -> str:
-    """Execute a tool and return the result."""
-    if tool_name == "hello_world":
-        name = tool_input.get("name", "there")
-        return f"Hello, {name}! 👋 Tool calling is working!"
-    return f"Unknown tool: {tool_name}"
+agent311_tools = create_sdk_mcp_server(name="agent311", tools=[hello_world])
 
 
 async def _stream_chat(messages: list):
-    """Stream chat responses from Claude API in Vercel AI SDK data stream protocol."""
+    """Stream chat responses using Claude Agent SDK."""
     msg_id = str(uuid.uuid4())
 
-    # Convert frontend message format to Claude format
-    claude_messages = []
-    for msg in messages:
-        role = msg.get("role")
-        content = msg.get("content") or msg.get("text", "")
-        if role and content:
-            claude_messages.append({"role": role, "content": content})
+    # Extract the last user message as the prompt
+    prompt = ""
+    for msg in reversed(messages):
+        if msg.get("role") == "user":
+            prompt = msg.get("content", "")
+            break
 
-    # start
+    # Build conversation context from earlier messages
+    context = ""
+    for msg in messages[:-1]:
+        role = msg.get("role", "")
+        content = msg.get("content", "")
+        if role and content:
+            context += f"<{role}>\n{content}\n</{role}>\n\n"
+
+    system_prompt = SYSTEM_PROMPT
+    if context:
+        system_prompt += f"\n\nConversation history:\n{context}"
+
+    options = ClaudeAgentOptions(
+        system_prompt=system_prompt,
+        mcp_servers={"agent311": agent311_tools},
+        allowed_tools=["mcp__agent311__hello_world"],
+        permission_mode="bypassPermissions",
+        max_turns=5,
+        include_partial_messages=True,
+    )
+
+    # SSE stream
     yield f"data: {json.dumps({'type': 'start', 'messageId': msg_id})}\n\n"
-    # text-start
     yield f"data: {json.dumps({'type': 'text-start', 'id': msg_id})}\n\n"
 
     try:
-        # First API call with tools
-        response = await client.messages.create(
-            model="claude-sonnet-4-5-20250929",
-            max_tokens=2048,
-            system=SYSTEM_PROMPT,
-            messages=claude_messages,
-            tools=TOOLS,
-        )
-
-        # Check if Claude wants to use tools
-        tool_results = []
-        for block in response.content:
-            if block.type == "tool_use":
-                # Execute the tool
-                tool_name = block.name
-                tool_input = block.input
-                tool_result = execute_tool(tool_name, tool_input)
-
-                # Stream the tool execution notification
-                yield f"data: {json.dumps({'type': 'text-delta', 'id': msg_id, 'delta': f'[Using tool: {tool_name}]\\n\\n'})}\n\n"
-
-                tool_results.append({
-                    "type": "tool_result",
-                    "tool_use_id": block.id,
-                    "content": tool_result
-                })
-
-        # If tools were used, make a second API call with results
-        if tool_results:
-            # Add assistant's response and tool results to messages
-            claude_messages.append({
-                "role": "assistant",
-                "content": response.content
-            })
-            claude_messages.append({
-                "role": "user",
-                "content": tool_results
-            })
-
-            # Stream the final response
-            async with client.messages.stream(
-                model="claude-sonnet-4-5-20250929",
-                max_tokens=2048,
-                system=SYSTEM_PROMPT,
-                messages=claude_messages,
-            ) as stream:
-                async for text in stream.text_stream:
-                    yield f"data: {json.dumps({'type': 'text-delta', 'id': msg_id, 'delta': text})}\n\n"
-        else:
-            # No tools used, just stream the text response
-            for block in response.content:
-                if hasattr(block, "text"):
-                    # Split into chunks for streaming effect
-                    text = block.text
-                    chunk_size = 5
-                    for i in range(0, len(text), chunk_size):
-                        chunk = text[i:i+chunk_size]
-                        yield f"data: {json.dumps({'type': 'text-delta', 'id': msg_id, 'delta': chunk})}\n\n"
-
+        async with ClaudeSDKClient(options=options) as client:
+            await client.query(prompt)
+            async for message in client.receive_response():
+                if isinstance(message, StreamEvent):
+                    event = message.event
+                    if event.get("type") == "content_block_delta":
+                        delta = event.get("delta", {})
+                        if delta.get("type") == "text_delta":
+                            text = delta.get("text", "")
+                            if text:
+                                yield f"data: {json.dumps({'type': 'text-delta', 'id': msg_id, 'delta': text})}\n\n"
     except Exception as e:
-        # On error, send error message as text
-        error_msg = f"Error: {str(e)}"
-        yield f"data: {json.dumps({'type': 'text-delta', 'id': msg_id, 'delta': error_msg})}\n\n"
+        yield f"data: {json.dumps({'type': 'text-delta', 'id': msg_id, 'delta': f'Error: {str(e)}'})}\n\n"
 
-    # text-end
     yield f"data: {json.dumps({'type': 'text-end', 'id': msg_id})}\n\n"
-    # finish
     yield f"data: {json.dumps({'type': 'finish'})}\n\n"
-    # done
     yield "data: [DONE]\n\n"
 
 
 @app.get("/")
 async def hello():
     return {"message": "Hello, World!"}
-
-
-@app.get("/api/skills")
-async def list_skills():
-    """Return list of available skills."""
-    return {
-        "skills": [
-            {
-                "name": tool["name"],
-                "description": tool["description"]
-            }
-            for tool in TOOLS
-        ]
-    }
 
 
 @app.post("/api/chat")
