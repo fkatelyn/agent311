@@ -19,7 +19,8 @@ A comprehensive guide to deploying services on Railway using MCP (Model Context 
 - [MCP Tool Quick Reference](#mcp-tool-quick-reference)
 - [Railway CLI Reference](#railway-cli-reference)
 - [Section A: Python/FastAPI (Nixpacks)](#section-a-pythonfastapi-nixpacks)
-- [Section B: React/JavaScript Frontend (Nixpacks)](#section-b-reactjavascript-frontend-nixpacks)
+- [Section B: React/Vite Frontend (Nixpacks)](#section-b-reactvite-frontend-nixpacks)
+- [Section B2: Next.js assistant-ui Frontend (Nixpacks)](#section-b2-nextjs-assistant-ui-frontend-nixpacks)
 - [Section C: Docker Image Service](#section-c-docker-image-service)
 - [Multi-Service Architecture](#multi-service-architecture)
 - [MCP Workflow Diagrams](#mcp-workflow-diagrams)
@@ -36,7 +37,8 @@ This guide covers three deployment types, all driven by Railway MCP tools:
 | Type | Builder | Use Case |
 |------|---------|----------|
 | **A. Python/FastAPI** | Nixpacks | Backend APIs with uv package manager |
-| **B. React/JavaScript** | Nixpacks | Vite-based frontends served as static files |
+| **B. React/Vite** | Nixpacks | Vite-based frontends served as static files |
+| **B2. Next.js (assistant-ui)** | Nixpacks | Next.js apps in a monorepo subdirectory |
 | **C. Docker** | Dockerfile | Custom builds, system dependencies, multi-stage |
 
 Each section includes config files, MCP tool calls, mermaid diagrams, and battle-tested gotchas from real deployments.
@@ -54,20 +56,24 @@ graph TB
     subgraph Railway Project
         BE[Backend Service<br>Python/FastAPI<br>Nixpacks]
         FE[Frontend Service<br>React/Vite<br>Nixpacks]
+        AUI[assistant-ui Service<br>Next.js<br>Nixpacks]
         DK[Docker Service<br>Custom Image<br>Dockerfile]
     end
 
     subgraph Domains
-        BED[backend-production.up.railway.app]
+        BED[agent311-production.up.railway.app]
         FED[frontend-production.up.railway.app]
+        AUID[assistantui-production.up.railway.app]
         DKD[docker-svc-production.up.railway.app]
     end
 
     BE --> BED
     FE --> FED
+    AUI --> AUID
     DK --> DKD
 
     FE -->|fetch /api/chat| BE
+    AUI -->|fetch /api/chat| BE
     DK -->|railway.internal| BE
 
     GH[GitHub Repo] -->|auto-deploy on push| Railway Project
@@ -81,7 +87,7 @@ repo-root/
 ├── agent311/                  # Python backend package
 │   ├── __init__.py
 │   └── main.py               # FastAPI app entry point
-├── frontend/                  # React frontend
+├── frontend/                  # React/Vite frontend (old)
 │   ├── src/
 │   │   ├── App.jsx
 │   │   ├── App.css
@@ -91,6 +97,15 @@ repo-root/
 │   ├── vite.config.js
 │   ├── nixpacks.toml          # Frontend Nixpacks config
 │   └── .env.production        # Build-time env vars
+├── assistantui/               # Next.js assistant-ui frontend
+│   ├── app/
+│   │   ├── assistant.tsx      # Runtime config (API URL)
+│   │   ├── layout.tsx
+│   │   └── page.tsx
+│   ├── components/
+│   ├── package.json           # Must have engines.node >= 20
+│   ├── nixpacks.toml          # assistantui Nixpacks config
+│   └── railway.json           # Config-as-code for this service
 ├── pyproject.toml             # Must be at repo root
 ├── uv.lock                    # Must be at repo root
 ├── nixpacks.toml              # Backend Nixpacks config
@@ -590,7 +605,7 @@ Visit `https://agent311-production.up.railway.app/docs` for the auto-generated F
 
 ---
 
-## Section B: React/JavaScript Frontend (Nixpacks)
+## Section B: React/Vite Frontend (Nixpacks)
 
 Deploy a Vite React frontend as a separate Railway service that communicates with the FastAPI backend.
 
@@ -777,6 +792,35 @@ curl https://frontend-production-xxxx.up.railway.app/
 
 ---
 
+## Section B2: Next.js assistant-ui Frontend (Nixpacks)
+
+Deploy a Next.js frontend (using [assistant-ui](https://github.com/assistant-ui/assistant-ui)) as a third Railway service in a monorepo. This section documents the real pitfalls encountered deploying `assistantui/` alongside the existing backend and Vite frontend.
+
+For the full step-by-step walkthrough and all gotchas, see the dedicated guide: **[Deploying assistant-ui on Railway](railway-nextjs-assistantui.md)**.
+
+### Key Differences from Vite Frontend
+
+| Aspect | Vite Frontend (Section B) | Next.js assistant-ui |
+|--------|--------------------------|---------------------|
+| Framework | Vite + React | Next.js 16 |
+| Directory | `frontend/` | `assistantui/` |
+| Node.js version | 18+ works | **20+ required** |
+| Serving | `npx serve dist` (static) | `next start` (SSR) |
+| API URL | Build-time `VITE_*` env var | Runtime `NEXT_PUBLIC_*` env var |
+| Config-as-code | Not used | `assistantui/railway.json` |
+
+### Critical Gotchas (Summary)
+
+1. **Root directory** must be set in Railway dashboard (Settings > Root Directory > `/assistantui`) — cannot be set via MCP tools
+2. **Config-as-code path** must be set in Railway dashboard (Settings > Config-as-code > `assistantui/railway.json`) — then Apply changes
+3. **Dashboard changes require Apply** — Railway shows "N changes" badge but doesn't auto-apply
+4. **`packageManager` field in package.json** will override your nixpacks.toml install commands — remove it if using npm
+5. **Node.js 18 is the Nixpacks default** but Next.js 16 requires Node.js 20+ — add `"engines": {"node": ">=20.9.0"}` to package.json
+6. **Force `providers = ["node"]`** in nixpacks.toml or the root `pyproject.toml` causes Python provider detection
+7. **Backend must handle AI SDK v6 message format** — assistant-ui sends `parts` array, not `content` string
+
+---
+
 ## Section C: Docker Image Service
 
 Deploy a service using a custom Dockerfile instead of Nixpacks.
@@ -949,10 +993,15 @@ repo-root/
 ├── agent311/         ← Backend service (root dir: /)
 │   ├── __init__.py
 │   └── main.py
-├── frontend/         ← Frontend service (root dir: /frontend)
+├── frontend/         ← Vite frontend service (root dir: /frontend)
 │   ├── src/
 │   ├── package.json
 │   └── nixpacks.toml
+├── assistantui/      ← Next.js frontend service (root dir: /assistantui)
+│   ├── app/
+│   ├── package.json
+│   ├── nixpacks.toml
+│   └── railway.json  ← Config-as-code for this service
 ├── pyproject.toml    ← Backend config (at repo root)
 ├── nixpacks.toml     ← Backend Nixpacks config
 └── railway.json      ← Backend Railway config
@@ -961,6 +1010,7 @@ repo-root/
 Each Railway service in the same project can have a different **root directory**:
 - Backend: `/` (repo root) — reads `pyproject.toml`, `nixpacks.toml`, `railway.json`
 - Frontend: `/frontend` — reads `frontend/package.json`, `frontend/nixpacks.toml`
+- assistant-ui: `/assistantui` — reads `assistantui/package.json`, `assistantui/nixpacks.toml`, `assistantui/railway.json`
 
 ### Service Linking and Root Directories
 
@@ -1066,7 +1116,7 @@ flowchart TD
 | `uvicorn: command not found` | venv bin not on PATH | Use `python -m uvicorn` |
 | App not reachable | No public domain | Run `generate-domain` |
 
-### React/JavaScript
+### React/Vite
 
 | Error | Cause | Fix |
 |-------|-------|-----|
@@ -1074,6 +1124,17 @@ flowchart TD
 | CORS error in browser | Backend missing CORS middleware | Add `CORSMiddleware` to FastAPI |
 | Frontend serves Python app | Root directory not set | Set `rootDirectory: "frontend"` via GraphQL |
 | `npx serve` not found | Node.js not detected | Ensure `package.json` in service root dir |
+
+### Next.js / assistant-ui
+
+| Error | Cause | Fix |
+|-------|-------|-----|
+| `Node.js version ">=20.9.0" is required` | Nixpacks defaults to Node.js 18 | Add `"engines": {"node": ">=20.9.0"}` to `package.json` |
+| `pnpm i --frozen-lockfile` fails, no lockfile | `packageManager` field in `package.json` forces pnpm | Remove `"packageManager": "pnpm@..."` from `package.json` |
+| Python provider detected instead of Node | Root `pyproject.toml` confuses Nixpacks | Add `providers = ["node"]` to `nixpacks.toml` |
+| Config-as-code not picked up | Path not set or changes not applied | Set Config-as-code to `assistantui/railway.json` in dashboard, then Apply |
+| Agent loses conversation memory | Backend reads `content` but AI SDK v6 sends `parts` | Handle both `msg.content` and `msg.parts` in backend |
+| Root directory ignored | Dashboard changes pending | Click Apply after changing settings (check "N changes" badge) |
 
 ### Docker
 
@@ -1245,16 +1306,29 @@ npm run dev
 
 The Vite dev server proxies to `http://localhost:8000` by default (via the fallback in `App.jsx`).
 
-### Both Together
+### assistant-ui Frontend
 
-Run backend and frontend in separate terminals:
+```bash
+cd assistantui
+npm install
+npm run dev
+```
+
+The Next.js dev server runs on `http://localhost:3000` and connects to the backend at `NEXT_PUBLIC_API_URL` (default: `http://localhost:8000`).
+
+### All Three Together
+
+Run backend and both frontends in separate terminals:
 
 ```bash
 # Terminal 1 - Backend
 uv run uvicorn agent311.main:app --host 0.0.0.0 --port 8000 --reload
 
-# Terminal 2 - Frontend
+# Terminal 2 - Vite Frontend (port 5173)
 cd frontend && npm run dev
+
+# Terminal 3 - assistant-ui Frontend (port 3000)
+cd assistantui && npm run dev
 ```
 
 ---
@@ -1262,7 +1336,8 @@ cd frontend && npm run dev
 ## See Also
 
 - [FastAPI Setup Guide](railway-fastapi-setup.md) — Original detailed FastAPI deployment walkthrough
-- [React Frontend Guide](railway-react-frontend.md) — Original detailed React frontend deployment walkthrough
+- [React Frontend Guide](railway-react-frontend.md) — Original detailed React/Vite frontend deployment walkthrough
+- [Next.js assistant-ui Guide](railway-nextjs-assistantui.md) — Deploying assistant-ui in a monorepo subdirectory (all pitfalls documented)
 - [MCP Tool Reference](../.claude/skills/railway-deploy/references/mcp-tool-reference.md) — Full parameter docs for all 14 tools
 - [Troubleshooting](../.claude/skills/railway-deploy/references/troubleshooting.md) — Consolidated error table
 - [Railway Deploy Skill](../.claude/skills/railway-deploy/SKILL.md) — Claude Code automation skill
