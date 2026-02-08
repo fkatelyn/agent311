@@ -9,4 +9,4 @@ dependsOn = ["install"]
 cmds = ["npm install -g @anthropic-ai/claude-code"]
 
 [start]
-cmd = "python -m uvicorn agent311.main:app --host 0.0.0.0 --port ${PORT:-8000}"
+cmd = "bash start.sh"
