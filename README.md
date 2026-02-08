@@ -120,6 +120,59 @@ See [docs/railway-deployment-guide.md](docs/railway-deployment-guide.md) for com
 
 Austin 311 service request data is available through the **City of Austin Open Data Portal** powered by Socrata.
 
+### What is Austin 311?
+
+**Austin 311** is the City of Austin's non-emergency service request system. Residents use it to report issues, request city services, and get information about city programs. It's a single point of contact for all city services that aren't emergencies.
+
+**How to Use 311:**
+- **Phone:** Call 3-1-1 (or 512-974-2000 from outside Austin)
+- **Web:** https://311.austin.gov
+- **Mobile App:** Austin 311 (iOS/Android)
+- **Text:** Text "ATX" to 512-974-2000
+
+### Example Use Cases
+
+**1. Report a Pothole:**
+```
+1. Call 311 or use the mobile app
+2. Provide location: "2100 Barton Springs Rd near Zilker Park"
+3. Describe: "Large pothole in right lane, approx 2ft wide"
+4. Receive SR number: 24-00123456
+5. Track status online or via app
+6. Average repair time: 3-5 business days
+```
+
+**2. Request Bulky Item Pickup:**
+```
+1. Go to 311.austin.gov or call 311
+2. Select "Austin Resource Recovery" → "Bulky Item Collection"
+3. Schedule pickup date (next available collection day)
+4. List items: old couch, mattress, desk
+5. Place items curbside by 6:30 AM on collection day
+6. Pickup completed within scheduled window
+```
+
+**3. Report Code Violation (Overgrown Vegetation):**
+```
+1. Submit via 311 app or website
+2. Upload photo of overgrown lot
+3. Provide address: "123 Main St"
+4. Inspector assigned within 2-3 days
+5. Notice sent to property owner
+6. Follow-up inspection after 10-day compliance period
+7. Track case status via SR number
+```
+
+**4. Report Street Light Outage:**
+```
+1. Use 311 mobile app
+2. Select "Transportation & Public Works" → "Street Light Outage"
+3. Tap location on map or enter nearest address
+4. Note pole number if visible (e.g., "Pole #12345")
+5. Austin Energy notified automatically
+6. Typical repair: 3-7 business days
+```
+
 ### Data API
 
 **Austin 311 Unified Dataset:**
