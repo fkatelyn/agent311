@@ -79,6 +79,7 @@ npm run preview
   - Bad: "feat: implement chat streaming endpoint with SSE protocol support"
 - **Commit messages** should be simple and human-readable — explain what changed and why, but keep it conversational
 - **Do not add** "Co-Authored-By" or other metadata that makes commits look automated
+- **Do not `git push`** unless the user explicitly asks to push or deploy to Railway. Commits are local-only by default.
 
 ## Key Files
 
