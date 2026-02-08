@@ -7,6 +7,8 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 
+from .skill_loader import load_skills, execute_skill
+
 app = FastAPI()
 
 app.add_middleware(
@@ -39,34 +41,42 @@ You can discuss:
 - Data trends and statistics
 - How to access the public dataset via Socrata API
 
-You have access to a hello_world tool for testing. When a user asks you to "test the tool", "run hello world", or "demo the skill", use the hello_world tool to show that tool calling works.
+You have access to skills/tools that are dynamically loaded from the .claude/skills/ directory. When a user asks to test a skill or run a tool, check what tools are available and use the appropriate one.
 
 Be helpful, accurate, and enthusiastic about Austin's civic data!"""
 
-# Tool definitions
-TOOLS = [
-    {
-        "name": "hello_world",
-        "description": "A simple test tool that returns a greeting message. Use this when the user asks to test tools, run hello world, or demo the skill system.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "name": {
-                    "type": "string",
-                    "description": "Optional name to include in the greeting"
-                }
+# Load skills dynamically from .claude/skills/
+TOOLS = load_skills()
+
+# Add the built-in hello_world tool
+TOOLS.append({
+    "name": "hello_world",
+    "description": "A simple test tool that returns a greeting message. Use this when the user asks to test tools, run hello world, or demo the skill system.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "name": {
+                "type": "string",
+                "description": "Optional name to include in the greeting"
             }
         }
     }
-]
+})
+
+print(f"✓ Loaded {len(TOOLS)} tools/skills")
+for tool in TOOLS:
+    print(f"  - {tool['name']}")
 
 
 def execute_tool(tool_name: str, tool_input: dict) -> str:
     """Execute a tool and return the result."""
+    # Built-in hello_world tool
     if tool_name == "hello_world":
         name = tool_input.get("name", "there")
-        return f"Hello, {name}! 👋 This is the agent311 hello_world tool responding. Tool calling is working! The backend successfully received the tool request and executed it."
-    return f"Unknown tool: {tool_name}"
+        return f"Hello, {name}! 👋 This is the built-in hello_world tool. Tool calling is working!"
+
+    # Dynamic skills from .claude/skills/
+    return execute_skill(tool_name, tool_input, TOOLS)
 
 
 async def _stream_chat(messages: list):
@@ -106,7 +116,7 @@ async def _stream_chat(messages: list):
                 tool_result = execute_tool(tool_name, tool_input)
 
                 # Stream the tool execution notification
-                yield f"data: {json.dumps({'type': 'text-delta', 'id': msg_id, 'delta': f'[Using tool: {tool_name}]\\n'})}\n\n"
+                yield f"data: {json.dumps({'type': 'text-delta', 'id': msg_id, 'delta': f'[Using tool: {tool_name}]\\n\\n'})}\n\n"
 
                 tool_results.append({
                     "type": "tool_result",
@@ -162,6 +172,20 @@ async def _stream_chat(messages: list):
 @app.get("/")
 async def hello():
     return {"message": "Hello, World!"}
+
+
+@app.get("/api/skills")
+async def list_skills():
+    """Return list of available skills."""
+    return {
+        "skills": [
+            {
+                "name": tool["name"],
+                "description": tool["description"]
+            }
+            for tool in TOOLS
+        ]
+    }
 
 
 @app.post("/api/chat")
