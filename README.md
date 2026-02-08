@@ -3,17 +3,19 @@
 Austin 311 Data Science Agent — a full-stack application for exploring Austin 311 service request data using AI.
 
 **Live Demo:**
-- **Frontend:** https://frontend-production-893c.up.railway.app
+- **assistant-ui Frontend:** https://assistantui-production.up.railway.app
+- **Vite Frontend:** https://frontend-production-893c.up.railway.app
 - **Backend API:** https://agent311-production.up.railway.app
 
 ## Architecture
 
-- **Backend:** FastAPI + Claude Code SDK (streaming chat endpoint)
-- **Frontend:** React + Vite (custom SSE chat implementation)
-- **Package Manager:** uv (Python)
+- **Backend:** FastAPI + Claude Agent SDK (streaming chat endpoint)
+- **Frontend 1:** Next.js + [assistant-ui](https://github.com/assistant-ui/assistant-ui) (markdown, syntax highlighting, streaming)
+- **Frontend 2:** React + Vite (custom SSE chat implementation)
+- **Package Manager:** uv (Python), npm (JavaScript)
 - **Deployment:** Railway (Nixpacks builder)
 
-The backend exposes a `/api/chat` endpoint that streams AI responses using Server-Sent Events (SSE). The frontend implements a custom SSE parser to display streaming chat messages in real-time.
+The backend exposes a `/api/chat` endpoint that streams AI responses using Server-Sent Events (SSE). Both frontends connect to the same backend — the assistant-ui frontend uses the AI SDK v6 data stream protocol while the Vite frontend uses custom SSE parsing.
 
 ## Quick Start
 
@@ -29,19 +31,25 @@ uv run uvicorn agent311.main:app --reload --host 0.0.0.0 --port 8000
 
 API will be available at http://localhost:8000
 
-### Frontend (React)
+### Frontend — assistant-ui (Next.js)
 
 ```bash
-cd frontend
-
-# Install dependencies
+cd assistantui
 npm install
-
-# Run dev server
 npm run dev
 ```
 
-Frontend will be available at http://localhost:5173
+Available at http://localhost:3000
+
+### Frontend — Vite (React)
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Available at http://localhost:5173
 
 ## Project Structure
 
@@ -50,23 +58,33 @@ agent311/
 ├── agent311/              # Python backend package
 │   ├── __init__.py
 │   └── main.py           # FastAPI app with streaming chat endpoint
-├── frontend/             # React frontend
+├── assistantui/           # Next.js + assistant-ui frontend
+│   ├── app/
+│   │   ├── assistant.tsx  # Runtime config (API URL)
+│   │   ├── layout.tsx
+│   │   └── page.tsx
+│   ├── components/        # assistant-ui components
+│   ├── package.json
+│   ├── nixpacks.toml      # assistantui Railway config
+│   └── railway.json       # Config-as-code for this service
+├── frontend/              # React/Vite frontend
 │   ├── src/
-│   │   ├── App.jsx       # Chat UI with custom SSE streaming
+│   │   ├── App.jsx        # Chat UI with custom SSE streaming
 │   │   ├── App.css
 │   │   └── main.jsx
 │   ├── package.json
 │   ├── vite.config.js
-│   └── nixpacks.toml     # Frontend Railway config
-├── docs/                 # Documentation
+│   └── nixpacks.toml      # Frontend Railway config
+├── docs/                  # Documentation
 │   ├── railway-deployment-guide.md
+│   ├── railway-nextjs-assistantui.md
 │   └── git-and-gh-guide.md
-├── pyproject.toml        # Python deps (must be at root)
-├── uv.lock               # uv lockfile (must be at root)
-├── nixpacks.toml         # Backend Railway config
-├── railway.json          # Railway builder config
-├── start.sh              # Local dev startup script
-├── CLAUDE.md             # Development guidelines
+├── pyproject.toml         # Python deps (must be at root)
+├── uv.lock                # uv lockfile (must be at root)
+├── nixpacks.toml          # Backend Railway config
+├── railway.json           # Railway builder config
+├── start.sh               # Local dev startup script
+├── CLAUDE.md              # Development guidelines
 └── README.md
 ```
 
@@ -89,30 +107,38 @@ npm run preview  # Test production build locally
 
 ## Deployment
 
-This project uses Railway for deployment with separate services for backend and frontend.
+This project uses Railway for deployment with three services in a monorepo.
 
-**Backend Service:**
+**Backend Service (agent311):**
 - Automatically detected via root `pyproject.toml` + `uv.lock`
 - Uses Nixpacks with uv (version pinned in `nixpacks.toml`)
 - Start command: `python -m uvicorn agent311.main:app --host 0.0.0.0 --port ${PORT}`
 
-**Frontend Service:**
+**assistant-ui Frontend (assistantui):**
+- Next.js 16 with assistant-ui components
+- Root directory: `/assistantui` (set in Railway dashboard)
+- Requires Node.js 20+ (`engines` field in package.json)
+- Backend URL configured via `NEXT_PUBLIC_API_URL`
+
+**Vite Frontend (frontend):**
 - Built with `npm install && npm run build`
 - Served with `npx serve dist`
 - Backend API URL configured via `VITE_API_URL` env var
 
-See [docs/railway-deployment-guide.md](docs/railway-deployment-guide.md) for complete deployment instructions.
+See [docs/railway-deployment-guide.md](docs/railway-deployment-guide.md) for complete deployment instructions, and [docs/railway-nextjs-assistantui.md](docs/railway-nextjs-assistantui.md) for assistant-ui-specific pitfalls.
 
 ## Documentation
 
-- **[Railway Deployment Guide](docs/railway-deployment-guide.md)** - Complete guide for deploying Python/FastAPI, React, and Docker services on Railway
+- **[Railway Deployment Guide](docs/railway-deployment-guide.md)** - Complete guide for deploying Python/FastAPI, React, Next.js, and Docker services on Railway
+- **[Next.js assistant-ui Deployment](docs/railway-nextjs-assistantui.md)** - Deploying assistant-ui in a monorepo subdirectory (all pitfalls documented)
 - **[Git and GitHub CLI Guide](docs/git-and-gh-guide.md)** - Practical guide for using git and gh CLI
 - **[CLAUDE.md](CLAUDE.md)** - Development context and guidelines for working with this codebase
 
 ## Tech Stack
 
-- **Backend:** Python 3.12, FastAPI, uvicorn, Claude Code SDK
-- **Frontend:** React 19, Vite 6
+- **Backend:** Python 3.12, FastAPI, uvicorn, Claude Agent SDK
+- **Frontend 1:** Next.js 16, assistant-ui, AI SDK v6
+- **Frontend 2:** React 19, Vite 6
 - **Deployment:** Railway (Nixpacks)
 - **Package Management:** uv (Python), npm (JavaScript)
 
