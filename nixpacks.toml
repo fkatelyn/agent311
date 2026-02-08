@@ -1,8 +1,2 @@
-[phases.setup]
-nixPkgs = ["python312"]
-
-[phases.install]
-cmds = ["cd agent311 && uv sync --frozen --no-cache"]
-
 [start]
-cmd = "cd agent311 && python -m uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}"
+cmd = "python -m uvicorn agent311.main:app --host 0.0.0.0 --port ${PORT:-8000}"
