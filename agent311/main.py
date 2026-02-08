@@ -87,12 +87,15 @@ async def _stream_chat(messages: list):
     if context:
         system_prompt += f"\n\nConversation history:\n{context}"
 
+    stderr_lines = []
+
     options = ClaudeAgentOptions(
         system_prompt=system_prompt,
         mcp_servers={"agent311": agent311_tools},
         allowed_tools=["mcp__agent311__hello_world"],
         permission_mode="bypassPermissions",
         max_turns=5,
+        stderr=lambda line: stderr_lines.append(line),
     )
 
     # SSE stream
@@ -110,7 +113,8 @@ async def _stream_chat(messages: list):
                         elif isinstance(block, ToolUseBlock):
                             yield f"data: {json.dumps({'type': 'text-delta', 'id': msg_id, 'delta': f'[Using tool: {block.name}]\\n'})}\n\n"
     except Exception as e:
-        yield f"data: {json.dumps({'type': 'text-delta', 'id': msg_id, 'delta': f'Error: {str(e)}'})}\n\n"
+        stderr_output = "\n".join(stderr_lines[-10:]) if stderr_lines else "no stderr"
+        yield f"data: {json.dumps({'type': 'text-delta', 'id': msg_id, 'delta': f'Error: {str(e)}\\nStderr: {stderr_output}'})}\n\n"
 
     yield f"data: {json.dumps({'type': 'text-end', 'id': msg_id})}\n\n"
     yield f"data: {json.dumps({'type': 'finish'})}\n\n"
