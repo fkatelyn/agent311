@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@ai-sdk/react": "^3.0.79",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
