@@ -1,4 +1,5 @@
 providers = ["node"]
+# Node.js provider for Next.js assistant-ui frontend
 
 [variables]
 NEXT_PUBLIC_API_URL = "https://agent311-production.up.railway.app"
