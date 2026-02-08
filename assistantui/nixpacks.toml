@@ -1,3 +1,5 @@
+providers = ["node"]
+
 [variables]
 NEXT_PUBLIC_API_URL = "https://agent311-production.up.railway.app"
 
