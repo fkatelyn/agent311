@@ -89,6 +89,27 @@ npm run preview
 - `start.sh` — Local convenience script (not used by Railway)
 - `.python-version` — Pins Python 3.12
 
+## Environment Variables
+
+This project uses a `.env` file (not checked into git) to store local credentials:
+
+**`.env` file contains:**
+- `RAILWAY_TOKEN` - For Railway CLI deployments
+  - Get from: `railway login --browserless` or https://railway.app/account/tokens
+- `ANTHROPIC_API_KEY` - For Claude Code SDK integration
+  - Get from: https://console.anthropic.com/settings/keys
+- `GITHUB_TOKEN` - For GitHub API access (optional)
+  - Get from: https://github.com/settings/tokens
+
+**Setup:**
+```bash
+# Copy template and fill in your credentials
+cp .env .env
+# Edit .env with your actual tokens
+```
+
+The `.env` file is already in `.gitignore` and should never be committed.
+
 ## Important Notes
 
 - Backend must be run using `python -m uvicorn` (not bare `uvicorn`) to avoid PATH issues on Railway
