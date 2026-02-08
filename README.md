@@ -130,7 +130,10 @@ See [docs/railway-deployment-guide.md](docs/railway-deployment-guide.md) for com
 ## Documentation
 
 - **[Railway Deployment Guide](docs/railway-deployment-guide.md)** - Complete guide for deploying Python/FastAPI, React, Next.js, and Docker services on Railway
-- **[Next.js assistant-ui Deployment](docs/railway-nextjs-assistantui.md)** - Deploying assistant-ui in a monorepo subdirectory (all pitfalls documented)
+- **[Railway FastAPI Setup](docs/railway-fastapi-setup.md)** - Detailed FastAPI + uv deployment walkthrough
+- **[Railway React Frontend](docs/railway-react-frontend.md)** - Deploying the Vite React frontend on Railway
+- **[Railway Next.js assistant-ui](docs/railway-nextjs-assistantui.md)** - Deploying assistant-ui in a monorepo subdirectory (all pitfalls documented)
+- **[Claude Agent SDK Guide](docs/agent-sdk-guide.md)** - Integrating the Claude Agent SDK with FastAPI
 - **[Git and GitHub CLI Guide](docs/git-and-gh-guide.md)** - Practical guide for using git and gh CLI
 - **[CLAUDE.md](CLAUDE.md)** - Development context and guidelines for working with this codebase
 
