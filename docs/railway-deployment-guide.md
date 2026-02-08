@@ -1,6 +1,12 @@
 # Railway Deployment Guide (MCP-Driven)
 
-A comprehensive guide to deploying services on Railway using MCP (Model Context Protocol) tools from Claude Code. Covers Python/FastAPI, React/JavaScript, and Docker deployments.
+A comprehensive guide to deploying services on Railway using MCP (Model Context Protocol) tools from Claude Code or the Railway CLI. Covers Python/FastAPI, React/JavaScript, and Docker deployments.
+
+**Requirements:**
+- **Railway CLI**: Install via `brew install railway` or `npm install -g @railway/cli`
+- **Authentication**: Run `railway login` or set `RAILWAY_TOKEN` environment variable
+  - Get your token: `railway login --browserless` (opens browser, copy token from URL)
+  - Or from dashboard: [railway.app/account/tokens](https://railway.app/account/tokens)
 
 ---
 
@@ -11,6 +17,7 @@ A comprehensive guide to deploying services on Railway using MCP (Model Context 
 - [Prerequisites](#prerequisites)
 - [Railway MCP Setup](#railway-mcp-setup)
 - [MCP Tool Quick Reference](#mcp-tool-quick-reference)
+- [Railway CLI Reference](#railway-cli-reference)
 - [Section A: Python/FastAPI (Nixpacks)](#section-a-pythonfastapi-nixpacks)
 - [Section B: React/JavaScript Frontend (Nixpacks)](#section-b-reactjavascript-frontend-nixpacks)
 - [Section C: Docker Image Service](#section-c-docker-image-service)
@@ -177,6 +184,210 @@ All 14 Railway MCP tools at a glance. For full parameter details, see [MCP Tool 
 | `list-services` | Show project services | `workspacePath` |
 | `list-variables` | Show env vars | `workspacePath` |
 | `set-variables` | Set env vars | `workspacePath`, `variables` |
+
+---
+
+## Railway CLI Reference
+
+While the MCP tools provide a seamless experience within Claude Code, you can also use the Railway CLI directly for all operations. This section shows CLI equivalents for every MCP tool.
+
+### Installation
+
+**Using Homebrew (macOS/Linux):**
+```bash
+brew install railway
+```
+
+**Using npm:**
+```bash
+npm install -g @railway/cli
+```
+
+**Verify installation:**
+```bash
+railway --version
+```
+
+### Authentication
+
+```bash
+# Interactive login (opens browser)
+railway login
+
+# Browserless login (for servers/CI)
+railway login --browserless
+
+# Check authentication status
+railway whoami
+
+# Use token directly
+export RAILWAY_TOKEN=your-token-here
+```
+
+### Railway CLI Command Reference
+
+Complete mapping of MCP tools to CLI commands:
+
+| MCP Tool | Railway CLI Equivalent | Description |
+|----------|----------------------|-------------|
+| `check-railway-status` | `railway whoami` | Check CLI installation and authentication |
+| `create-project-and-link` | `railway init`<br>`railway link` | Create new project and link to directory |
+| `create-environment` | `railway environment` | Create/manage environments |
+| `deploy` | `railway up` | Deploy current directory to Railway |
+| `deploy-template` | `railway init --template <name>` | Deploy from template |
+| `generate-domain` | `railway domain` | Generate/manage public domain |
+| `get-logs` | `railway logs`<br>`railway logs --deployment <id>` | View service logs |
+| `link-environment` | `railway environment <name>` | Switch active environment |
+| `link-service` | `railway service <name>` | Link to specific service |
+| `list-deployments` | `railway status` | Show deployment status |
+| `list-projects` | `railway list` | List all projects |
+| `list-services` | `railway status` | Show services in project |
+| `list-variables` | `railway variables` | List environment variables |
+| `set-variables` | `railway variables set KEY=value` | Set environment variables |
+
+### Common CLI Workflows
+
+**Initial setup:**
+```bash
+# Create and link new project
+railway init
+# Select "Create new project" → enter name → choose environment
+
+# Or link to existing project
+railway link
+# Select project from list
+```
+
+**Deploy workflow:**
+```bash
+# Deploy current directory
+railway up
+
+# Deploy with CI mode (stream logs and exit)
+railway up --ci
+
+# Deploy specific service
+railway up --service backend
+```
+
+**Environment management:**
+```bash
+# List environments
+railway environment
+
+# Switch environment
+railway environment production
+
+# Create new environment
+railway environment add staging
+```
+
+**Service management:**
+```bash
+# List services
+railway status
+
+# Link to specific service
+railway service backend
+
+# View service logs
+railway logs
+
+# View logs with filters (CLI v4.9.0+)
+railway logs --lines 100
+railway logs --filter "error"
+
+# Stream live logs
+railway logs --follow
+```
+
+**Domain management:**
+```bash
+# Generate domain for current service
+railway domain
+
+# List all domains
+railway domain --list
+```
+
+**Variable management:**
+```bash
+# List variables
+railway variables
+
+# Set variable
+railway variables set API_KEY=abc123
+
+# Set multiple variables
+railway variables set API_KEY=abc123 DEBUG=true
+
+# Delete variable
+railway variables delete API_KEY
+```
+
+**Project info:**
+```bash
+# Show project status
+railway status
+
+# Show deployment history
+railway status --json | jq
+
+# Open project in browser
+railway open
+```
+
+### CLI vs MCP: When to Use Which
+
+**Use Railway CLI when:**
+- Working outside Claude Code
+- Writing shell scripts or CI/CD pipelines
+- Need fine-grained control over flags
+- Troubleshooting authentication issues
+- Want to use `railway open` to jump to dashboard
+
+**Use Railway MCP tools when:**
+- Working within Claude Code
+- Want Claude to manage deployments automatically
+- Prefer declarative tool calls over shell commands
+- Building Claude Code skills that automate Railway tasks
+
+### Advanced CLI Usage
+
+**Link project to specific directory:**
+```bash
+cd /path/to/project
+railway link
+# Or specify path:
+railway link --workdir /path/to/project
+```
+
+**Deploy from subdirectory:**
+```bash
+# Deploy frontend subfolder
+cd frontend
+railway up
+
+# Or from root with service flag
+railway up --service frontend
+```
+
+**View build logs:**
+```bash
+railway logs --deployment <deployment-id>
+```
+
+**Run commands in Railway environment:**
+```bash
+# Run command with Railway env vars loaded
+railway run npm start
+railway run python manage.py migrate
+```
+
+**Shell into running service:**
+```bash
+railway shell
+```
 
 ---
 
