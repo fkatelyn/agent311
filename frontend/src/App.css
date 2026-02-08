@@ -90,3 +90,20 @@ h1 {
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+.welcome {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  color: #888;
+  font-size: 1.1rem;
+}
+
+.error {
+  padding: 0.75rem 1rem;
+  background: #fee;
+  color: #c00;
+  border-radius: 8px;
+  font-size: 0.9rem;
+}
