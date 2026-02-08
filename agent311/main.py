@@ -39,7 +39,34 @@ You can discuss:
 - Data trends and statistics
 - How to access the public dataset via Socrata API
 
+You have access to a hello_world tool for testing. When a user asks you to "test the tool", "run hello world", or "demo the skill", use the hello_world tool to show that tool calling works.
+
 Be helpful, accurate, and enthusiastic about Austin's civic data!"""
+
+# Tool definitions
+TOOLS = [
+    {
+        "name": "hello_world",
+        "description": "A simple test tool that returns a greeting message. Use this when the user asks to test tools, run hello world, or demo the skill system.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "description": "Optional name to include in the greeting"
+                }
+            }
+        }
+    }
+]
+
+
+def execute_tool(tool_name: str, tool_input: dict) -> str:
+    """Execute a tool and return the result."""
+    if tool_name == "hello_world":
+        name = tool_input.get("name", "there")
+        return f"Hello, {name}! 👋 This is the agent311 hello_world tool responding. Tool calling is working! The backend successfully received the tool request and executed it."
+    return f"Unknown tool: {tool_name}"
 
 
 async def _stream_chat(messages: list):
@@ -60,16 +87,64 @@ async def _stream_chat(messages: list):
     yield f"data: {json.dumps({'type': 'text-start', 'id': msg_id})}\n\n"
 
     try:
-        # Stream from Claude API
-        async with client.messages.stream(
+        # First API call with tools
+        response = await client.messages.create(
             model="claude-sonnet-4-5-20250929",
             max_tokens=2048,
             system=SYSTEM_PROMPT,
             messages=claude_messages,
-        ) as stream:
-            async for text in stream.text_stream:
-                # Stream each text chunk as text-delta
-                yield f"data: {json.dumps({'type': 'text-delta', 'id': msg_id, 'delta': text})}\n\n"
+            tools=TOOLS,
+        )
+
+        # Check if Claude wants to use tools
+        tool_results = []
+        for block in response.content:
+            if block.type == "tool_use":
+                # Execute the tool
+                tool_name = block.name
+                tool_input = block.input
+                tool_result = execute_tool(tool_name, tool_input)
+
+                # Stream the tool execution notification
+                yield f"data: {json.dumps({'type': 'text-delta', 'id': msg_id, 'delta': f'[Using tool: {tool_name}]\\n'})}\n\n"
+
+                tool_results.append({
+                    "type": "tool_result",
+                    "tool_use_id": block.id,
+                    "content": tool_result
+                })
+
+        # If tools were used, make a second API call with results
+        if tool_results:
+            # Add assistant's response and tool results to messages
+            claude_messages.append({
+                "role": "assistant",
+                "content": response.content
+            })
+            claude_messages.append({
+                "role": "user",
+                "content": tool_results
+            })
+
+            # Stream the final response
+            async with client.messages.stream(
+                model="claude-sonnet-4-5-20250929",
+                max_tokens=2048,
+                system=SYSTEM_PROMPT,
+                messages=claude_messages,
+            ) as stream:
+                async for text in stream.text_stream:
+                    yield f"data: {json.dumps({'type': 'text-delta', 'id': msg_id, 'delta': text})}\n\n"
+        else:
+            # No tools used, just stream the text response
+            for block in response.content:
+                if hasattr(block, "text"):
+                    # Split into chunks for streaming effect
+                    text = block.text
+                    chunk_size = 5
+                    for i in range(0, len(text), chunk_size):
+                        chunk = text[i:i+chunk_size]
+                        yield f"data: {json.dumps({'type': 'text-delta', 'id': msg_id, 'delta': chunk})}\n\n"
 
     except Exception as e:
         # On error, send error message as text
