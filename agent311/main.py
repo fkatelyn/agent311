@@ -93,7 +93,7 @@ async def _stream_chat(messages: list):
         system_prompt=system_prompt,
         mcp_servers={"agent311": agent311_tools},
         allowed_tools=["mcp__agent311__hello_world"],
-        permission_mode="bypassPermissions",
+        permission_mode="acceptEdits",
         max_turns=5,
         stderr=lambda line: stderr_lines.append(line),
     )
