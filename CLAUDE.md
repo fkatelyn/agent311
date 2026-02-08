@@ -78,6 +78,7 @@ npm run preview
   - Good: "Add chat streaming endpoint"
   - Bad: "feat: implement chat streaming endpoint with SSE protocol support"
 - **Commit messages** should be simple and human-readable — explain what changed and why, but keep it conversational
+- **Do not add** "Co-Authored-By" or other metadata that makes commits look automated
 
 ## Key Files
 
