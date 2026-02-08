@@ -116,6 +116,79 @@ See [docs/railway-deployment-guide.md](docs/railway-deployment-guide.md) for com
 - **Deployment:** Railway (Nixpacks)
 - **Package Management:** uv (Python), npm (JavaScript)
 
+## Austin 311 Data Source
+
+Austin 311 service request data is available through the **City of Austin Open Data Portal** powered by Socrata.
+
+### Data API
+
+**Austin 311 Unified Dataset:**
+- **Portal:** https://data.austintexas.gov
+- **Dataset:** [311 Unified Data](https://data.austintexas.gov/City-Government/311-Unified-Data/i26j-ai4z)
+- **API Endpoint:** `https://data.austintexas.gov/resource/i26j-ai4z.json`
+- **Format:** JSON via Socrata Open Data API (SODA)
+- **Size:** ~7.8M rows (2014-present, growing daily)
+- **Update Frequency:** Real-time
+
+### Service Request Categories
+
+The dataset includes all 311 service requests across Austin:
+
+| Category | Example Services | Volume |
+|----------|-----------------|--------|
+| **Code Compliance** | Overgrown vegetation, junk vehicles, illegal dumping | ~25% |
+| **Austin Resource Recovery** | Missed collection, recycling, bulk items | ~20% |
+| **Transportation & Public Works** | Potholes, street lights, traffic signals | ~15% |
+| **Animal Services** | Stray animals, wildlife, barking dogs | ~10% |
+| **Austin Water** | Water leaks, pressure issues, billing | ~8% |
+| **Other** | Parks, libraries, health, development | ~22% |
+
+### Dataset Schema
+
+Key fields in the 311 dataset:
+
+```
+service_request_sr_number    # Unique SR ID (e.g., 24-00123456)
+sr_type_code                 # Service request type
+sr_description               # Free-text description
+method_received              # Phone, Web, Mobile, etc.
+sr_status                    # New, Closed, Duplicate
+created_date                 # Request creation timestamp
+last_update_date             # Last status update
+close_date                   # Resolution timestamp
+sr_location                  # Address or intersection
+latitude / longitude         # Geocoded coordinates
+council_district             # City council district (1-10)
+```
+
+### API Usage Example
+
+```bash
+# Get recent 311 requests (last 7 days)
+curl "https://data.austintexas.gov/resource/i26j-ai4z.json?\$where=created_date>='2024-01-01'&\$limit=100"
+
+# Get potholes by council district
+curl "https://data.austintexas.gov/resource/i26j-ai4z.json?sr_type_code=POTHOLE&council_district=5"
+
+# Count requests by type
+curl "https://data.austintexas.gov/resource/i26j-ai4z.json?\$select=sr_type_code,count(*)&\$group=sr_type_code"
+```
+
+### Socrata API Documentation
+
+- **API Docs:** https://dev.socrata.com/foundry/data.austintexas.gov/i26j-ai4z
+- **SoQL Query Language:** https://dev.socrata.com/docs/queries/
+- **Rate Limits:** 1,000 requests/day (unauthenticated), 100,000/day (with app token)
+- **App Token:** Register at https://data.austintexas.gov/profile/app_tokens
+
+### Data Stats (as of 2024)
+
+- **Total Records:** ~7.8 million service requests
+- **Date Range:** January 2014 - Present
+- **Daily Volume:** ~1,500-2,000 new requests per day
+- **Average Response Time:** 3-5 business days (varies by department)
+- **Peak Request Types:** Code Compliance (overgrown vegetation), ARR (missed collection)
+
 ## API Endpoints
 
 ### `POST /api/chat`
