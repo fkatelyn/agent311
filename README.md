@@ -142,13 +142,6 @@ data: {"type":"finish"}
 data: [DONE]
 ```
 
-## Contributing
-
-See [CLAUDE.md](CLAUDE.md) for development guidelines including:
-- Commit directly to `main` (no PRs)
-- Clean, natural commit messages
-- Development commands and architecture
-
 ## License
 
 MIT
