@@ -91,24 +91,20 @@ npm run preview
 
 ## Environment Variables
 
-This project uses a `.env` file (not checked into git) to store local credentials:
+This project uses a `~/.env` file (not checked into git) to store local credentials:
 
-**`.env` file contains:**
+**`~/.env` file contains:**
 - `RAILWAY_TOKEN` - For Railway CLI deployments
   - Get from: `railway login --browserless` or https://railway.app/account/tokens
+  - **Warning:** If `RAILWAY_TOKEN` is set as an env var, it overrides the CLI session token. If the token is expired, Railway CLI/MCP will fail even if `railway login` works. Fix: `unset RAILWAY_TOKEN`
 - `ANTHROPIC_API_KEY` - For Claude Code SDK integration
   - Get from: https://console.anthropic.com/settings/keys
 - `GITHUB_TOKEN` - For GitHub API access (optional)
   - Get from: https://github.com/settings/tokens
 
-**Setup:**
-```bash
-# Copy template and fill in your credentials
-cp .env .env
-# Edit .env with your actual tokens
-```
+**Railway MCP Note:** The Railway MCP server may need `RAILWAY_TOKEN` to authenticate. If MCP tools return "Invalid or expired token", check `~/.env` for the current token value, or run `unset RAILWAY_TOKEN` to fall back to the CLI session token from `railway login`.
 
-The `.env` file is already in `.gitignore` and should never be committed.
+The `~/.env` file should never be committed to git.
 
 ## Important Notes
 
