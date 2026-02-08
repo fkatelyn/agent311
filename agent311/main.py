@@ -1,6 +1,10 @@
 import json
+import logging
 import uuid
 from pathlib import Path
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 from claude_agent_sdk import (
     ClaudeSDKClient,
@@ -49,6 +53,28 @@ For older data or complex queries, use the Socrata API: https://data.austintexas
 Be helpful, accurate, and enthusiastic about Austin's civic data!"""
 
 
+def _extract_text(msg: dict) -> str:
+    """Extract text from a message, supporting both formats:
+    - Old format: {"role": "user", "content": "hello"}
+    - AI SDK v6:  {"role": "user", "parts": [{"type": "text", "text": "hello"}]}
+    """
+    # Try "content" first (old frontend / simple format)
+    content = msg.get("content")
+    if isinstance(content, str) and content:
+        return content
+
+    # Try "parts" array (AI SDK v6 UIMessage format)
+    parts = msg.get("parts", [])
+    if parts:
+        texts = []
+        for part in parts:
+            if isinstance(part, dict) and part.get("type") == "text":
+                texts.append(part.get("text", ""))
+        return "\n".join(texts)
+
+    return ""
+
+
 async def _stream_chat(messages: list):
     """Stream chat responses using Claude Agent SDK."""
     msg_id = str(uuid.uuid4())
@@ -57,20 +83,22 @@ async def _stream_chat(messages: list):
     prompt = ""
     for msg in reversed(messages):
         if msg.get("role") == "user":
-            prompt = msg.get("content", "")
+            prompt = _extract_text(msg)
             break
 
     # Build conversation context from earlier messages
     context = ""
     for msg in messages[:-1]:
         role = msg.get("role", "")
-        content = msg.get("content", "")
+        content = _extract_text(msg)
         if role and content:
             context += f"<{role}>\n{content}\n</{role}>\n\n"
 
     system_prompt = SYSTEM_PROMPT
     if context:
         system_prompt += f"\n\nConversation history:\n{context}"
+    logger.info(f"=== prompt: {prompt[:200]} ===")
+    logger.info(f"=== context length: {len(context)} chars, messages[:-1] count: {len(messages[:-1])} ===")
 
     options = ClaudeAgentOptions(
         system_prompt=system_prompt,
@@ -112,6 +140,11 @@ async def hello():
 async def chat(request: Request):
     body = await request.json()
     messages = body.get("messages", [])
+    logger.info(f"=== /api/chat received {len(messages)} messages ===")
+    for i, msg in enumerate(messages):
+        role = msg.get("role", "?")
+        text = _extract_text(msg)
+        logger.info(f"  msg[{i}] role={role} text={text[:200]}")
     return StreamingResponse(
         _stream_chat(messages),
         media_type="text/event-stream",
