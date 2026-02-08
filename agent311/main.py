@@ -4,7 +4,9 @@ import uuid
 from claude_agent_sdk import (
     ClaudeSDKClient,
     ClaudeAgentOptions,
-    StreamEvent,
+    AssistantMessage,
+    TextBlock,
+    ToolUseBlock,
     tool,
     create_sdk_mcp_server,
 )
@@ -91,7 +93,6 @@ async def _stream_chat(messages: list):
         allowed_tools=["mcp__agent311__hello_world"],
         permission_mode="bypassPermissions",
         max_turns=5,
-        include_partial_messages=True,
     )
 
     # SSE stream
@@ -102,14 +103,12 @@ async def _stream_chat(messages: list):
         async with ClaudeSDKClient(options=options) as client:
             await client.query(prompt)
             async for message in client.receive_response():
-                if isinstance(message, StreamEvent):
-                    event = message.event
-                    if event.get("type") == "content_block_delta":
-                        delta = event.get("delta", {})
-                        if delta.get("type") == "text_delta":
-                            text = delta.get("text", "")
-                            if text:
-                                yield f"data: {json.dumps({'type': 'text-delta', 'id': msg_id, 'delta': text})}\n\n"
+                if isinstance(message, AssistantMessage):
+                    for block in message.content:
+                        if isinstance(block, TextBlock):
+                            yield f"data: {json.dumps({'type': 'text-delta', 'id': msg_id, 'delta': block.text})}\n\n"
+                        elif isinstance(block, ToolUseBlock):
+                            yield f"data: {json.dumps({'type': 'text-delta', 'id': msg_id, 'delta': f'[Using tool: {block.name}]\\n'})}\n\n"
     except Exception as e:
         yield f"data: {json.dumps({'type': 'text-delta', 'id': msg_id, 'delta': f'Error: {str(e)}'})}\n\n"
 
