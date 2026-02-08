@@ -2,7 +2,7 @@
 NIXPACKS_UV_VERSION = "0.10.0"
 
 [phases.setup]
-nixPkgsAppend = ["nodejs_20"]
+nixPkgs = ["python312", "gcc", "nodejs-18_x"]
 
 [phases.cli]
 dependsOn = ["install"]
