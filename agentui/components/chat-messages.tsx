@@ -7,6 +7,10 @@ import {
   MessageContent,
   MessageResponse,
 } from "@/components/ai-elements/message";
+import {
+  Tool,
+  ToolHeader,
+} from "@/components/ai-elements/tool";
 import { Button } from "@/components/ui/button";
 import { PlayIcon } from "lucide-react";
 
@@ -17,6 +21,7 @@ interface ChatMessagesProps {
 }
 
 const CODE_BLOCK_RE = /```(?:jsx|tsx|html|js|javascript)\n([\s\S]*?)```/g;
+const TOOL_CALL_RE = /\[Using tool: (\w+)\]\\?n?/g;
 
 function extractCodeBlocks(text: string): string[] {
   const blocks: string[] = [];
@@ -26,6 +31,24 @@ function extractCodeBlocks(text: string): string[] {
     blocks.push(match[1]);
   }
   return blocks;
+}
+
+type Segment = { type: "text"; content: string } | { type: "tool"; name: string };
+
+function splitByToolCalls(text: string): Segment[] {
+  const segments: Segment[] = [];
+  const re = new RegExp(TOOL_CALL_RE.source, TOOL_CALL_RE.flags);
+  let lastIndex = 0;
+  let match;
+  while ((match = re.exec(text)) !== null) {
+    const before = text.slice(lastIndex, match.index);
+    if (before.trim()) segments.push({ type: "text", content: before });
+    segments.push({ type: "tool", name: match[1] });
+    lastIndex = match.index + match[0].length;
+  }
+  const after = text.slice(lastIndex);
+  if (after.trim()) segments.push({ type: "text", content: after });
+  return segments;
 }
 
 export function ChatMessages({
@@ -77,13 +100,34 @@ export function ChatMessages({
           }
 
           const codeBlocks = extractCodeBlocks(message.content);
+          const segments = splitByToolCalls(message.content);
+          const hasToolCalls = segments.some((s) => s.type === "tool");
 
           return (
             <Message key={message.id} from="assistant">
               <MessageContent>
-                <MessageResponse mode={isAssistantStreaming ? "streaming" : "static"}>
-                  {message.content}
-                </MessageResponse>
+                {hasToolCalls && !isAssistantStreaming ? (
+                  segments.map((seg, i) =>
+                    seg.type === "tool" ? (
+                      <Tool key={i}>
+                        <ToolHeader
+                          type={"dynamic-tool" as never}
+                          state={"output-available" as never}
+                          toolName={seg.name}
+                          title={seg.name}
+                        />
+                      </Tool>
+                    ) : (
+                      <MessageResponse key={i} mode="static">
+                        {seg.content}
+                      </MessageResponse>
+                    )
+                  )
+                ) : (
+                  <MessageResponse mode={isAssistantStreaming ? "streaming" : "static"}>
+                    {message.content}
+                  </MessageResponse>
+                )}
                 {codeBlocks.length > 0 && !isAssistantStreaming && (
                   <div className="mt-2 flex flex-wrap gap-2">
                     {codeBlocks.map((code, i) => (
