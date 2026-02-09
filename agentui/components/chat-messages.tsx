@@ -1,18 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useCallback, useState } from "react";
 import type { ChatMessage } from "@/lib/types";
 import {
   Message,
   MessageContent,
   MessageResponse,
 } from "@/components/ai-elements/message";
-import {
-  Tool,
-  ToolHeader,
-} from "@/components/ai-elements/tool";
-import { Button } from "@/components/ui/button";
-import { PlayIcon } from "lucide-react";
+import { CodeXmlIcon, ChevronRightIcon, EyeIcon } from "lucide-react";
 
 interface ChatMessagesProps {
   messages: ChatMessage[];
@@ -23,32 +18,121 @@ interface ChatMessagesProps {
 const CODE_BLOCK_RE = /```(?:jsx|tsx|html|js|javascript)\n([\s\S]*?)```/g;
 const TOOL_CALL_RE = /\[Using tool: (\w+)\]\\?n?/g;
 
-function extractCodeBlocks(text: string): string[] {
-  const blocks: string[] = [];
+// Match the full code block including fences for stripping
+const CODE_BLOCK_FULL_RE = /```(?:jsx|tsx|html|js|javascript)\n[\s\S]*?```/g;
+
+interface CodeBlockInfo {
+  code: string;
+  language: string;
+  title: string;
+}
+
+function extractCodeBlockInfos(text: string): CodeBlockInfo[] {
+  const blocks: CodeBlockInfo[] = [];
+  const re = /```(jsx|tsx|html|js|javascript)\n([\s\S]*?)```/g;
   let match;
-  const re = new RegExp(CODE_BLOCK_RE.source, CODE_BLOCK_RE.flags);
   while ((match = re.exec(text)) !== null) {
-    blocks.push(match[1]);
+    const lang = match[1];
+    const code = match[2];
+    // Try to extract title from HTML <title> tag
+    const titleMatch = code.match(/<title>([^<]+)<\/title>/i);
+    const title = titleMatch ? titleMatch[1] : "Index";
+    const langLabel = lang === "js" || lang === "javascript" ? "JavaScript"
+      : lang === "html" ? "HTML"
+      : lang.toUpperCase();
+    blocks.push({ code, language: langLabel, title });
   }
   return blocks;
 }
 
-type Segment = { type: "text"; content: string } | { type: "tool"; name: string };
+function stripCodeBlocks(text: string): string {
+  return text.replace(CODE_BLOCK_FULL_RE, "").trim();
+}
 
-function splitByToolCalls(text: string): Segment[] {
-  const segments: Segment[] = [];
+const TOOL_LABELS: Record<string, string> = {
+  Write: "Created a file",
+  Read: "Read a file",
+  Edit: "Edited a file",
+  Bash: "Ran a command",
+  Search: "Searched",
+  Grep: "Searched files",
+  Glob: "Found files",
+  WebFetch: "Fetched a page",
+  WebSearch: "Searched the web",
+};
+
+function extractToolNames(text: string): string[] {
+  const names: string[] = [];
   const re = new RegExp(TOOL_CALL_RE.source, TOOL_CALL_RE.flags);
-  let lastIndex = 0;
   let match;
   while ((match = re.exec(text)) !== null) {
-    const before = text.slice(lastIndex, match.index);
-    if (before.trim()) segments.push({ type: "text", content: before });
-    segments.push({ type: "tool", name: match[1] });
-    lastIndex = match.index + match[0].length;
+    names.push(match[1]);
   }
-  const after = text.slice(lastIndex);
-  if (after.trim()) segments.push({ type: "text", content: after });
-  return segments;
+  return names;
+}
+
+function stripToolCalls(text: string): string {
+  return text.replace(TOOL_CALL_RE, "").trim();
+}
+
+function ToolSummary({ toolNames }: { toolNames: string[] }) {
+  const [expanded, setExpanded] = useState(false);
+  // Deduplicate and count
+  const counts = new Map<string, number>();
+  for (const name of toolNames) {
+    counts.set(name, (counts.get(name) || 0) + 1);
+  }
+  const labels = Array.from(counts.entries()).map(([name, count]) => {
+    const base = TOOL_LABELS[name] || `Used ${name}`;
+    return count > 1 ? `${base} (${count}x)` : base;
+  });
+  const summary = labels.join(", ");
+
+  return (
+    <button
+      onClick={() => setExpanded((e) => !e)}
+      className="mb-1 flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+    >
+      <span>{summary}</span>
+      <ChevronRightIcon
+        className={`h-3 w-3 transition-transform ${expanded ? "rotate-90" : ""}`}
+      />
+      {expanded && (
+        <span className="ml-1 font-mono text-[10px]">
+          [{toolNames.join(", ")}]
+        </span>
+      )}
+    </button>
+  );
+}
+
+function ArtifactCard({
+  info,
+  onOpen,
+}: {
+  info: CodeBlockInfo;
+  onOpen: () => void;
+}) {
+  return (
+    <button
+      onClick={onOpen}
+      className="my-2 flex w-full items-center gap-4 rounded-lg border border-border/60 bg-card p-3 text-left transition-colors hover:bg-accent/50"
+    >
+      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-muted">
+        <CodeXmlIcon className="h-5 w-5 text-muted-foreground" />
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="text-sm font-medium truncate">{info.title}</div>
+        <div className="text-xs text-muted-foreground">
+          Code · {info.language}
+        </div>
+      </div>
+      <div className="flex items-center gap-1.5 rounded-md border border-border/60 bg-background px-3 py-1.5 text-xs font-medium">
+        <EyeIcon className="h-3.5 w-3.5" />
+        Open Preview
+      </div>
+    </button>
+  );
 }
 
 export function ChatMessages({
@@ -99,51 +183,42 @@ export function ChatMessages({
             );
           }
 
-          const codeBlocks = extractCodeBlocks(message.content);
-          const segments = splitByToolCalls(message.content);
-          const hasToolCalls = segments.some((s) => s.type === "tool");
+          // During streaming, render raw content
+          if (isAssistantStreaming) {
+            return (
+              <Message key={message.id} from="assistant">
+                <MessageContent>
+                  <MessageResponse mode="streaming">
+                    {message.content}
+                  </MessageResponse>
+                </MessageContent>
+              </Message>
+            );
+          }
+
+          // For completed messages, parse tool calls and code blocks
+          const toolNames = extractToolNames(message.content);
+          const codeBlockInfos = extractCodeBlockInfos(message.content);
+          const cleanText = stripCodeBlocks(stripToolCalls(message.content));
 
           return (
             <Message key={message.id} from="assistant">
               <MessageContent>
-                {hasToolCalls && !isAssistantStreaming ? (
-                  segments.map((seg, i) =>
-                    seg.type === "tool" ? (
-                      <Tool key={i}>
-                        <ToolHeader
-                          type={"dynamic-tool" as never}
-                          state={"output-available" as never}
-                          toolName={seg.name}
-                          title={seg.name}
-                        />
-                      </Tool>
-                    ) : (
-                      <MessageResponse key={i} mode="static">
-                        {seg.content}
-                      </MessageResponse>
-                    )
-                  )
-                ) : (
-                  <MessageResponse mode={isAssistantStreaming ? "streaming" : "static"}>
-                    {message.content}
+                {toolNames.length > 0 && (
+                  <ToolSummary toolNames={toolNames} />
+                )}
+                {cleanText && (
+                  <MessageResponse mode="static">
+                    {cleanText}
                   </MessageResponse>
                 )}
-                {codeBlocks.length > 0 && !isAssistantStreaming && (
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {codeBlocks.map((code, i) => (
-                      <Button
-                        key={i}
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleOpenPreview(code)}
-                        className="gap-1.5"
-                      >
-                        <PlayIcon className="h-3.5 w-3.5" />
-                        Open Preview{codeBlocks.length > 1 ? ` ${i + 1}` : ""}
-                      </Button>
-                    ))}
-                  </div>
-                )}
+                {codeBlockInfos.map((info, i) => (
+                  <ArtifactCard
+                    key={i}
+                    info={info}
+                    onOpen={() => handleOpenPreview(info.code)}
+                  />
+                ))}
               </MessageContent>
             </Message>
           );
