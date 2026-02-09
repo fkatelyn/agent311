@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Artifact,
   ArtifactHeader,
@@ -29,14 +29,34 @@ interface ArtifactPanelProps {
   onClose: () => void;
 }
 
+function isFullHtmlDocument(code: string): boolean {
+  const trimmed = code.trimStart().toLowerCase();
+  return trimmed.startsWith("<!doctype") || trimmed.startsWith("<html");
+}
+
+function HtmlIframePreview({ code }: { code: string }) {
+  const srcDoc = useMemo(() => code, [code]);
+  return (
+    <iframe
+      srcDoc={srcDoc}
+      sandbox="allow-scripts"
+      className="h-full w-full border-0 bg-white"
+      title="HTML Preview"
+    />
+  );
+}
+
 export function ArtifactPanel({ code, onClose }: ArtifactPanelProps) {
   const [tab, setTab] = useState("preview");
+  const isHtml = isFullHtmlDocument(code);
+  const codeLanguage: BundledLanguage = isHtml ? "html" : "tsx";
+  const fileName = isHtml ? "page.html" : "component.tsx";
 
   return (
     <div className="w-[40%] min-w-[320px] border-l">
       <Artifact className="flex h-full flex-col rounded-none border-0">
         <ArtifactHeader>
-          <ArtifactTitle>JSX Preview</ArtifactTitle>
+          <ArtifactTitle>{isHtml ? "HTML Preview" : "JSX Preview"}</ArtifactTitle>
           <ArtifactActions>
             <ArtifactClose onClick={onClose} />
           </ArtifactActions>
@@ -63,10 +83,14 @@ export function ArtifactPanel({ code, onClose }: ArtifactPanelProps) {
             className="flex-1 overflow-auto p-0 mt-0"
           >
             <ArtifactContent className="h-full">
-              <JSXPreview jsx={code}>
-                <JSXPreviewContent className="min-h-[200px]" />
-                <JSXPreviewError />
-              </JSXPreview>
+              {isHtml ? (
+                <HtmlIframePreview code={code} />
+              ) : (
+                <JSXPreview jsx={code}>
+                  <JSXPreviewContent className="min-h-[200px]" />
+                  <JSXPreviewError />
+                </JSXPreview>
+              )}
             </ArtifactContent>
           </TabsContent>
 
@@ -76,12 +100,12 @@ export function ArtifactPanel({ code, onClose }: ArtifactPanelProps) {
           >
             <CodeBlock
               code={code}
-              language={"tsx" as BundledLanguage}
+              language={codeLanguage}
               className="rounded-none border-0"
             >
               <CodeBlockHeader>
                 <CodeBlockTitle>
-                  <span className="font-mono text-xs">component.tsx</span>
+                  <span className="font-mono text-xs">{fileName}</span>
                 </CodeBlockTitle>
                 <CodeBlockActions>
                   <CodeBlockCopyButton />

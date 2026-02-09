@@ -16,12 +16,12 @@ interface ChatMessagesProps {
   onOpenPreview: (code: string) => void;
 }
 
-const JSX_CODE_BLOCK_RE = /```(?:jsx|tsx)\n([\s\S]*?)```/g;
+const CODE_BLOCK_RE = /```(?:jsx|tsx|html|js|javascript)\n([\s\S]*?)```/g;
 
-function extractJsxBlocks(text: string): string[] {
+function extractCodeBlocks(text: string): string[] {
   const blocks: string[] = [];
   let match;
-  const re = new RegExp(JSX_CODE_BLOCK_RE.source, JSX_CODE_BLOCK_RE.flags);
+  const re = new RegExp(CODE_BLOCK_RE.source, CODE_BLOCK_RE.flags);
   while ((match = re.exec(text)) !== null) {
     blocks.push(match[1]);
   }
@@ -76,7 +76,7 @@ export function ChatMessages({
             );
           }
 
-          const jsxBlocks = extractJsxBlocks(message.content);
+          const codeBlocks = extractCodeBlocks(message.content);
 
           return (
             <Message key={message.id} from="assistant">
@@ -84,9 +84,9 @@ export function ChatMessages({
                 <MessageResponse mode={isAssistantStreaming ? "streaming" : "static"}>
                   {message.content}
                 </MessageResponse>
-                {jsxBlocks.length > 0 && !isAssistantStreaming && (
+                {codeBlocks.length > 0 && !isAssistantStreaming && (
                   <div className="mt-2 flex flex-wrap gap-2">
-                    {jsxBlocks.map((code, i) => (
+                    {codeBlocks.map((code, i) => (
                       <Button
                         key={i}
                         variant="outline"
@@ -95,7 +95,7 @@ export function ChatMessages({
                         className="gap-1.5"
                       >
                         <PlayIcon className="h-3.5 w-3.5" />
-                        Open Preview{jsxBlocks.length > 1 ? ` ${i + 1}` : ""}
+                        Open Preview{codeBlocks.length > 1 ? ` ${i + 1}` : ""}
                       </Button>
                     ))}
                   </div>
