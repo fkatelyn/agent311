@@ -2,11 +2,6 @@
 
 Austin 311 Data Science Agent — a full-stack application for exploring Austin 311 service request data using AI.
 
-**Live Demo:**
-- **assistant-ui Frontend:** https://assistantui-production.up.railway.app
-- **Vite Frontend:** https://frontend-production-893c.up.railway.app
-- **Backend API:** https://agent311-production.up.railway.app
-
 ## Architecture
 
 - **Backend:** FastAPI + Claude Agent SDK (streaming chat endpoint)
