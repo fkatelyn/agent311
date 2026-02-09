@@ -1,13 +1,17 @@
 "use client";
 
-import { useEffect, useRef, useCallback, useState } from "react";
+import { useEffect, useRef, useCallback } from "react";
 import type { ChatMessage } from "@/lib/types";
 import {
   Message,
   MessageContent,
   MessageResponse,
 } from "@/components/ai-elements/message";
-import { CodeXmlIcon, ChevronRightIcon, EyeIcon } from "lucide-react";
+import {
+  Tool,
+  ToolHeader,
+} from "@/components/ai-elements/tool";
+import { CodeXmlIcon, EyeIcon } from "lucide-react";
 
 interface ChatMessagesProps {
   messages: ChatMessage[];
@@ -16,7 +20,7 @@ interface ChatMessagesProps {
 }
 
 const CODE_BLOCK_RE = /```(?:jsx|tsx|html|js|javascript)\n([\s\S]*?)```/g;
-const TOOL_CALL_RE = /\[Using tool: (\w+)\]\\?n?/g;
+const TOOL_CALL_RE = /\[Using tool: (\w+)\](?:\\n|\n)?/g;
 
 // Match the full code block including fences for stripping
 const CODE_BLOCK_FULL_RE = /```(?:jsx|tsx|html|js|javascript)\n[\s\S]*?```/g;
@@ -72,37 +76,25 @@ function extractToolNames(text: string): string[] {
 }
 
 function stripToolCalls(text: string): string {
-  return text.replace(TOOL_CALL_RE, "").trim();
+  return text.replace(TOOL_CALL_RE, "\n").trim();
 }
 
-function ToolSummary({ toolNames }: { toolNames: string[] }) {
-  const [expanded, setExpanded] = useState(false);
-  // Deduplicate and count
-  const counts = new Map<string, number>();
-  for (const name of toolNames) {
-    counts.set(name, (counts.get(name) || 0) + 1);
-  }
-  const labels = Array.from(counts.entries()).map(([name, count]) => {
-    const base = TOOL_LABELS[name] || `Used ${name}`;
-    return count > 1 ? `${base} (${count}x)` : base;
-  });
-  const summary = labels.join(", ");
+function ToolCallGroup({ toolNames }: { toolNames: string[] }) {
+  // Deduplicate: show each unique tool once
+  const unique = Array.from(new Set(toolNames));
+  const title = unique
+    .map((name) => TOOL_LABELS[name] || name)
+    .join(", ");
 
   return (
-    <button
-      onClick={() => setExpanded((e) => !e)}
-      className="mb-1 flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-    >
-      <span>{summary}</span>
-      <ChevronRightIcon
-        className={`h-3 w-3 transition-transform ${expanded ? "rotate-90" : ""}`}
+    <Tool defaultOpen={false} className="mb-2">
+      <ToolHeader
+        type={"dynamic-tool" as never}
+        state={"output-available" as never}
+        toolName={unique.join(", ")}
+        title={title}
       />
-      {expanded && (
-        <span className="ml-1 font-mono text-[10px]">
-          [{toolNames.join(", ")}]
-        </span>
-      )}
-    </button>
+    </Tool>
   );
 }
 
@@ -205,7 +197,7 @@ export function ChatMessages({
             <Message key={message.id} from="assistant">
               <MessageContent>
                 {toolNames.length > 0 && (
-                  <ToolSummary toolNames={toolNames} />
+                  <ToolCallGroup toolNames={toolNames} />
                 )}
                 {cleanText && (
                   <MessageResponse mode="static">
