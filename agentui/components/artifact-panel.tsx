@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import {
   Artifact,
   ArtifactHeader,
@@ -48,12 +48,42 @@ function HtmlIframePreview({ code }: { code: string }) {
 
 export function ArtifactPanel({ code, onClose }: ArtifactPanelProps) {
   const [tab, setTab] = useState("preview");
+  const [width, setWidth] = useState(40);
+  const dragging = useRef(false);
   const isHtml = isFullHtmlDocument(code);
   const codeLanguage: BundledLanguage = isHtml ? "html" : "tsx";
   const fileName = isHtml ? "page.html" : "component.tsx";
 
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    dragging.current = true;
+    const onMouseMove = (e: MouseEvent) => {
+      if (!dragging.current) return;
+      const pct = ((window.innerWidth - e.clientX) / window.innerWidth) * 100;
+      setWidth(Math.min(80, Math.max(20, pct)));
+    };
+    const onMouseUp = () => {
+      dragging.current = false;
+      document.removeEventListener("mousemove", onMouseMove);
+      document.removeEventListener("mouseup", onMouseUp);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    document.addEventListener("mousemove", onMouseMove);
+    document.addEventListener("mouseup", onMouseUp);
+  }, []);
+
   return (
-    <div className="w-[40%] min-w-[320px] border-l">
+    <div className="relative min-w-[320px] border-l" style={{ width: `${width}%` }}>
+      {/* Drag handle */}
+      <div
+        onMouseDown={handleMouseDown}
+        className="absolute -left-1 top-0 z-10 flex h-full w-3 cursor-col-resize items-center justify-center hover:bg-primary/10"
+      >
+        <div className="h-8 w-1 rounded-full bg-muted-foreground/40" />
+      </div>
       <Artifact className="flex h-full flex-col rounded-none border-0">
         <ArtifactHeader>
           <ArtifactTitle>{isHtml ? "HTML Preview" : "JSX Preview"}</ArtifactTitle>
