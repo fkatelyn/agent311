@@ -12,8 +12,10 @@ from claude_agent_sdk import (
     AssistantMessage,
     TextBlock,
     ToolUseBlock,
+    create_sdk_mcp_server,
+    tool,
 )
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 
@@ -51,6 +53,85 @@ You have a local CSV file at /tmp/agent311_data/311_recent.csv containing the pa
 For older data or complex queries, use the Socrata API: https://data.austintexas.gov/resource/xwdj-i9he.csv (or .json). Use $where, $limit, $order, $select, $group parameters.
 
 Be helpful, accurate, and enthusiastic about Austin's civic data!"""
+
+VIEWABLE_EXTENSIONS = {
+    ".html": "html",
+    ".htm": "html",
+    ".js": "javascript",
+    ".mjs": "javascript",
+    ".cjs": "javascript",
+    ".jsx": "jsx",
+    ".tsx": "tsx",
+}
+VIEWABLE_ROOTS = (Path("/tmp").resolve(),)
+MAX_VIEWABLE_BYTES = 200_000
+
+
+def _normalize_path(path_value: str) -> str:
+    return path_value.strip().strip('"').strip("'")
+
+
+def _load_viewable_file(path_value: str) -> dict:
+    normalized = _normalize_path(path_value)
+    if not normalized:
+        raise ValueError("`path` is required.")
+
+    try:
+        file_path = Path(normalized).expanduser().resolve(strict=True)
+    except FileNotFoundError as exc:
+        raise FileNotFoundError(f"File not found: {normalized}") from exc
+
+    if not file_path.is_file():
+        raise ValueError(f"Path is not a file: {file_path}")
+
+    ext = file_path.suffix.lower()
+    if ext not in VIEWABLE_EXTENSIONS:
+        allowed = ", ".join(sorted(VIEWABLE_EXTENSIONS))
+        raise ValueError(f"Unsupported file type for preview. Allowed: {allowed}")
+
+    if not any(file_path.is_relative_to(root) for root in VIEWABLE_ROOTS):
+        allowed_roots = ", ".join(str(root) for root in VIEWABLE_ROOTS)
+        raise PermissionError(
+            f"Path is outside allowed roots ({allowed_roots}): {file_path}"
+        )
+
+    size_bytes = file_path.stat().st_size
+    if size_bytes > MAX_VIEWABLE_BYTES:
+        raise ValueError(
+            f"File is too large for preview ({size_bytes} bytes > {MAX_VIEWABLE_BYTES})."
+        )
+
+    return {
+        "path": str(file_path),
+        "language": VIEWABLE_EXTENSIONS[ext],
+        "sizeBytes": size_bytes,
+        "content": file_path.read_text(encoding="utf-8", errors="replace"),
+    }
+
+
+@tool(
+    "view_content",
+    "Prepare local HTML/JS content for host-side artifact preview.",
+    {"path": str},
+)
+async def view_content(args: dict):
+    path_value = str(args.get("path", "")).strip()
+    try:
+        file_info = _load_viewable_file(path_value)
+        text = (
+            f"Prepared artifact preview content for {file_info['path']} "
+            f"({file_info['language']}, {file_info['sizeBytes']} bytes)."
+        )
+    except (FileNotFoundError, PermissionError, ValueError) as exc:
+        text = f"Unable to prepare preview: {exc}"
+
+    return {"content": [{"type": "text", "text": text}]}
+
+
+agent311_host_tools = create_sdk_mcp_server(
+    name="agent311_host",
+    tools=[view_content],
+)
 
 
 def _extract_text(msg: dict) -> str:
@@ -104,7 +185,18 @@ async def _stream_chat(messages: list):
         system_prompt=system_prompt,
         cwd=str(Path(__file__).parent),
         setting_sources=["project"],
-        allowed_tools=["Skill", "Read", "Write", "Edit", "Bash", "Task", "WebSearch", "WebFetch"],
+        mcp_servers={"agent311_host": agent311_host_tools},
+        allowed_tools=[
+            "Skill",
+            "Read",
+            "Write",
+            "Edit",
+            "Bash",
+            "Task",
+            "WebSearch",
+            "WebFetch",
+            "mcp__agent311_host__view_content",
+        ],
         permission_mode="acceptEdits",
         max_turns=60,
     )
@@ -122,6 +214,13 @@ async def _stream_chat(messages: list):
                         if isinstance(block, TextBlock):
                             yield f"data: {json.dumps({'type': 'text-delta', 'id': msg_id, 'delta': block.text})}\n\n"
                         elif isinstance(block, ToolUseBlock):
+                            if block.name == "mcp__agent311_host__view_content":
+                                block_input = block.input if isinstance(block.input, dict) else {}
+                                path_value = block_input.get("path")
+                                if isinstance(path_value, str) and path_value.strip():
+                                    marker = f"[Using tool: view_content {path_value}]\\n"
+                                    yield f"data: {json.dumps({'type': 'text-delta', 'id': msg_id, 'delta': marker})}\n\n"
+                                    continue
                             yield f"data: {json.dumps({'type': 'text-delta', 'id': msg_id, 'delta': f'[Using tool: {block.name}]\\n'})}\n\n"
     except Exception as e:
         yield f"data: {json.dumps({'type': 'text-delta', 'id': msg_id, 'delta': f'Error: {str(e)}'})}\n\n"
@@ -134,6 +233,18 @@ async def _stream_chat(messages: list):
 @app.get("/")
 async def hello():
     return {"message": "Hello, World!"}
+
+
+@app.get("/api/fetch_file")
+async def fetch_file(path: str = Query(..., description="Absolute path to a previewable file")):
+    try:
+        return _load_viewable_file(path)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @app.post("/api/chat")

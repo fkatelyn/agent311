@@ -17,6 +17,40 @@ import {
   titleFromFirstMessage,
 } from "@/lib/chat-store";
 
+const VIEW_CONTENT_TOOL_RE = /\[Using tool:\s*view_content\s+([^\]\n]+)\](?:\\n|\n)?/g;
+
+interface FetchFileResponse {
+  path: string;
+  language: string;
+  sizeBytes: number;
+  content: string;
+}
+
+function normalizeToolPath(rawPath: string): string {
+  return rawPath.trim().replace(/^['"]|['"]$/g, "");
+}
+
+function extractViewContentPaths(text: string): string[] {
+  const matches: string[] = [];
+  const seen = new Set<string>();
+  const re = new RegExp(VIEW_CONTENT_TOOL_RE.source, VIEW_CONTENT_TOOL_RE.flags);
+  let match: RegExpExecArray | null;
+
+  while ((match = re.exec(text)) !== null) {
+    const normalized = normalizeToolPath(match[1] ?? "");
+    if (normalized && !seen.has(normalized)) {
+      seen.add(normalized);
+      matches.push(normalized);
+    }
+  }
+
+  return matches;
+}
+
+function buildArtifactCodeFence(file: FetchFileResponse): string {
+  return `\n\n\`\`\`${file.language}\n${file.content}\n\`\`\`\n`;
+}
+
 export function Chat() {
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [currentSession, setCurrentSession] = useState<ChatSession | null>(
@@ -175,10 +209,32 @@ export function Chat() {
           }
         }
 
+        const viewContentPaths = extractViewContentPaths(fullText);
+        let finalText = fullText;
+
+        for (const path of viewContentPaths) {
+          try {
+            const fetchRes = await fetch(
+              `${API_URL}/api/fetch_file?path=${encodeURIComponent(path)}`
+            );
+            if (!fetchRes.ok) {
+              finalText += `\n\nFailed to fetch preview content for ${path} (HTTP ${fetchRes.status}).`;
+              continue;
+            }
+
+            const file = (await fetchRes.json()) as FetchFileResponse;
+            if (typeof file.content === "string" && file.content.length > 0) {
+              finalText += buildArtifactCodeFence(file);
+            }
+          } catch {
+            finalText += `\n\nFailed to fetch preview content for ${path}.`;
+          }
+        }
+
         // Save session
         const finalMessages = [
           ...updatedMessages,
-          { ...assistantMessage, content: fullText },
+          { ...assistantMessage, content: finalText },
         ];
         setMessages(finalMessages);
         currentSession.messages = finalMessages;

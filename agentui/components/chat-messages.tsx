@@ -19,8 +19,7 @@ interface ChatMessagesProps {
   onOpenPreview: (code: string) => void;
 }
 
-const CODE_BLOCK_RE = /```(?:jsx|tsx|html|js|javascript)\n([\s\S]*?)```/g;
-const TOOL_CALL_RE = /\[Using tool: (\w+)\](?:\\n|\n)?/g;
+const TOOL_CALL_RE = /\[Using tool:\s*([^\]\n]+)\](?:\\n|\n)?/g;
 
 // Match the full code block including fences for stripping
 const CODE_BLOCK_FULL_RE = /```(?:jsx|tsx|html|js|javascript)\n[\s\S]*?```/g;
@@ -63,27 +62,53 @@ const TOOL_LABELS: Record<string, string> = {
   Glob: "Found files",
   WebFetch: "Fetched a page",
   WebSearch: "Searched the web",
+  view_content: "Viewed content",
 };
 
-function extractToolNames(text: string): string[] {
-  const names: string[] = [];
-  const re = new RegExp(TOOL_CALL_RE.source, TOOL_CALL_RE.flags);
-  let match;
-  while ((match = re.exec(text)) !== null) {
-    names.push(match[1]);
+interface ToolCallInfo {
+  raw: string;
+  name: string;
+  args: string;
+}
+
+function parseToolCall(raw: string): ToolCallInfo {
+  const trimmed = raw.trim();
+  const firstSpace = trimmed.indexOf(" ");
+  if (firstSpace < 0) {
+    return { raw: trimmed, name: trimmed, args: "" };
   }
-  return names;
+
+  return {
+    raw: trimmed,
+    name: trimmed.slice(0, firstSpace),
+    args: trimmed.slice(firstSpace + 1).trim(),
+  };
+}
+
+function extractToolCalls(text: string): ToolCallInfo[] {
+  const calls: ToolCallInfo[] = [];
+  const re = new RegExp(TOOL_CALL_RE.source, TOOL_CALL_RE.flags);
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(text)) !== null) {
+    calls.push(parseToolCall(match[1]));
+  }
+  return calls;
 }
 
 function stripToolCalls(text: string): string {
   return text.replace(TOOL_CALL_RE, "\n").trim();
 }
 
-function ToolCallGroup({ toolNames }: { toolNames: string[] }) {
-  // Deduplicate: show each unique tool once
-  const unique = Array.from(new Set(toolNames));
+function ToolCallGroup({ toolCalls }: { toolCalls: ToolCallInfo[] }) {
+  // Deduplicate: show each unique call once
+  const unique = Array.from(
+    new Map(toolCalls.map((call) => [call.raw, call])).values()
+  );
   const title = unique
-    .map((name) => TOOL_LABELS[name] || name)
+    .map((call) => {
+      const label = TOOL_LABELS[call.name] || call.name;
+      return call.args ? `${label} ${call.args}` : label;
+    })
     .join(", ");
 
   return (
@@ -91,7 +116,7 @@ function ToolCallGroup({ toolNames }: { toolNames: string[] }) {
       <ToolHeader
         type={"dynamic-tool" as never}
         state={"output-available" as never}
-        toolName={unique.join(", ")}
+        toolName={unique.map((call) => call.raw).join(", ")}
         title={title}
       />
     </Tool>
@@ -189,15 +214,15 @@ export function ChatMessages({
           }
 
           // For completed messages, parse tool calls and code blocks
-          const toolNames = extractToolNames(message.content);
+          const toolCalls = extractToolCalls(message.content);
           const codeBlockInfos = extractCodeBlockInfos(message.content);
           const cleanText = stripCodeBlocks(stripToolCalls(message.content));
 
           return (
             <Message key={message.id} from="assistant">
               <MessageContent>
-                {toolNames.length > 0 && (
-                  <ToolCallGroup toolNames={toolNames} />
+                {toolCalls.length > 0 && (
+                  <ToolCallGroup toolCalls={toolCalls} />
                 )}
                 {cleanText && (
                   <MessageResponse mode="static">

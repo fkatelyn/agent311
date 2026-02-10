@@ -397,7 +397,12 @@ export const CodeBlockContent = ({
     let cancelled = false;
 
     // Reset to raw tokens when code changes (shows current code, not stale tokens)
-    setTokenized(highlightCode(code, language) ?? rawTokens);
+    const initialTokens = highlightCode(code, language) ?? rawTokens;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        setTokenized(initialTokens);
+      }
+    });
 
     // Subscribe to async highlighting result
     highlightCode(code, language, (result) => {
