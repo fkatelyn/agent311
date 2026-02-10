@@ -261,6 +261,26 @@ async def chat(request: Request):
     )
 ```
 
+### SSE Event Types (UI Contract)
+
+For chat UIs that consume this stream, these are the core event names to know:
+
+| Event Type | Purpose | Emitted by current `agent311/main.py` |
+|---|---|---|
+| `start` | Starts one assistant message envelope (`messageId`) | Yes |
+| `tool-input-start` | Tool call input stream started | No (reserved / optional) |
+| `tool-input-delta` | Incremental tool input chunks | No (reserved / optional) |
+| `tool-output-available` | Tool execution result became available | No (reserved / optional) |
+| `text-start` | Text stream started for assistant message | Yes |
+| `text-delta` | Incremental assistant text chunks | Yes |
+| `text-end` | Text stream finished | Yes |
+| `finish` | Message stream finished | Yes |
+
+Notes:
+- The server also sends `data: [DONE]` as terminal sentinel.
+- Tool activity is currently surfaced via `text-delta` markers (for example `[Using tool: Read]`), not structured tool-input/tool-output stream events.
+- If you later add structured tool stream events (`tool-input-start`, `tool-input-delta`, `tool-output-available`), keep `text-*` events for backward compatibility with existing clients.
+
 ### Key points
 
 - **`ClaudeSDKClient`** is used (not `query()`) because it supports multi-turn conversation with tools.
@@ -423,6 +443,7 @@ curl -N -X POST http://localhost:8000/api/chat \
 
 ## References
 
+- [View Content Artifact Viewer (this repo)](view-content-artifact-viewer.md)
 - [Agent SDK Overview](https://platform.claude.com/docs/en/agent-sdk/overview)
 - [Python SDK Reference](https://platform.claude.com/docs/en/agent-sdk/python)
 - [Agent SDK Skills](https://platform.claude.com/docs/en/agent-sdk/skills)

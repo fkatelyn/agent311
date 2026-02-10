@@ -129,6 +129,7 @@ See [docs/railway-deployment-guide.md](docs/railway-deployment-guide.md) for com
 - **[Railway React Frontend](docs/railway-react-frontend.md)** - Deploying the Vite React frontend on Railway
 - **[Railway Next.js assistant-ui](docs/railway-nextjs-assistantui.md)** - Deploying assistant-ui in a monorepo subdirectory (all pitfalls documented)
 - **[Claude Agent SDK Guide](docs/agent-sdk-guide.md)** - Integrating the Claude Agent SDK with FastAPI
+- **[View Content Artifact Viewer](docs/view-content-artifact-viewer.md)** - Host file preview design, flow diagrams, and streaming event contract
 - **[Git and GitHub CLI Guide](docs/git-and-gh-guide.md)** - Practical guide for using git and gh CLI
 - **[CLAUDE.md](CLAUDE.md)** - Development context and guidelines for working with this codebase
 
