@@ -46,16 +46,16 @@ These are the event names you will commonly see in streaming chat integrations:
 ### Event Order Model
 
 ```mermaid
-flowchart LR
-    A[start] --> B[text-start]
-    B --> C[text-delta ...]
-    C --> D[text-end]
-    D --> E[finish]
+flowchart TD
+  A[start] --> B[text-start]
+  B --> C[text-delta ...]
+  C --> D[text-end]
+  D --> E[finish]
 
-    B -. optional tool path .-> T1[tool-input-start]
-    T1 --> T2[tool-input-delta ...]
-    T2 --> T3[tool-output-available]
-    T3 -. continue response .-> C
+  B -. optional tool path .-> T1[tool-input-start]
+  T1 --> T2[tool-input-delta ...]
+  T2 --> T3[tool-output-available]
+  T3 -. continue response .-> C
 ```
 
 ### What this repo emits today
