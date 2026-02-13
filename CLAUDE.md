@@ -16,7 +16,9 @@ agent311 is an Austin 311 Data Science Agent — a full-stack application with a
 ## Architecture
 
 ### Backend (`agent311/`)
-- Entry point: `agent311/main.py` — FastAPI app with CORS-enabled streaming chat endpoint
+- Self-contained backend directory with its own `pyproject.toml`, `uv.lock`, `nixpacks.toml`, `railway.json`, and `start.sh`
+- Python package: `agent311/agent311/` — contains `main.py` and `__init__.py`
+- Entry point: `agent311/agent311/main.py` — FastAPI app with CORS-enabled streaming chat endpoint
 - Chat endpoint: `POST /api/chat` — accepts messages array, returns SSE stream in Vercel AI SDK protocol format
 - Currently returns dummy responses; designed to integrate Claude Code SDK for real data analysis
 - Must be imported as `agent311.main:app` (package-qualified import)
@@ -30,17 +32,20 @@ agent311 is an Austin 311 Data Science Agent — a full-stack application with a
 
 ### Deployment (Railway)
 - Two separate Railway services: one for backend, one for frontend
-- Backend uses `nixpacks.toml` at repo root with `NIXPACKS_UV_VERSION=0.10.0`
+- Backend Root Directory set to `/agent311` in Railway dashboard
+- Backend uses `agent311/nixpacks.toml` with `NIXPACKS_UV_VERSION=0.10.0`
 - Frontend uses `frontend/nixpacks.toml` with build command `npm install && npm run build`
-- Railway auto-detects uv via root `pyproject.toml` + `uv.lock`
-- Start command: `python -m uvicorn agent311.main:app --host 0.0.0.0 --port ${PORT:-8000}`
+- Railway auto-detects uv via `agent311/pyproject.toml` + `agent311/uv.lock`
+- Start command: `bash start.sh` (which runs `python -m uvicorn agent311.main:app`)
 
 ## Development Commands
 
 ### Backend
 
 ```bash
-# Run FastAPI dev server (from repo root)
+cd agent311
+
+# Run FastAPI dev server
 uv run uvicorn agent311.main:app --host 0.0.0.0 --port 8000
 
 # Or with auto-reload
@@ -83,12 +88,12 @@ npm run preview
 
 ## Key Files
 
-- `pyproject.toml` + `uv.lock` — Python dependencies (must be at repo root for Nixpacks)
-- `nixpacks.toml` — Backend Railway config (uv version, start command)
+- `agent311/pyproject.toml` + `agent311/uv.lock` — Python dependencies
+- `agent311/nixpacks.toml` — Backend Railway config (uv version, system packages, start command)
+- `agent311/railway.json` — Specifies Nixpacks builder with config path
+- `agent311/start.sh` — Startup script (downloads 311 data, starts uvicorn)
+- `agent311/.python-version` — Pins Python 3.12
 - `frontend/nixpacks.toml` — Frontend Railway config (build/start commands, API URL)
-- `railway.json` — Specifies Nixpacks builder
-- `start.sh` — Local convenience script (not used by Railway)
-- `.python-version` — Pins Python 3.12
 
 ## Environment Variables
 
@@ -114,3 +119,4 @@ The `~/.env` file should never be committed to git.
 - Backend streams messages using Vercel AI SDK data stream protocol format (types: `start`, `text-start`, `text-delta`, `text-end`, `finish`, `[DONE]`)
 - CORS is wide-open (`*`) for development; should be restricted in production
 - Railway sets `NIXPACKS_PYTHON_PACKAGE_MANAGER=uv` via dashboard env var
+- Railway backend service Root Directory must be set to `/agent311`
