@@ -1,0 +1,5 @@
+User-Agent: *
+Disallow: /
+
+# This site does not permit AI training, scraping, or indexing.
+# No content from this site may be used for training machine learning models.
