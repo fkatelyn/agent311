@@ -13,5 +13,4 @@ curl -s -o "$DATA_DIR/311_recent.csv" \
 ROWS=$(wc -l < "$DATA_DIR/311_recent.csv" | tr -d ' ')
 echo "Downloaded $ROWS rows to $DATA_DIR/311_recent.csv"
 
-. /opt/venv/bin/activate
-python -m uvicorn agent311.main:app --host 0.0.0.0 --port ${PORT:-8000}
+uv run uvicorn agent311.main:app --host 0.0.0.0 --port ${PORT:-8000}
