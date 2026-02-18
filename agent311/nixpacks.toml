@@ -2,7 +2,7 @@
 NIXPACKS_UV_VERSION = "0.10.0"
 
 [phases.setup]
-nixPkgs = ["python312", "gcc", "nodejs-18_x"]
+nixPkgs = ["python312", "gcc", "nodejs-18_x", "postgresql"]
 
 [phases.cli]
 dependsOn = ["install"]

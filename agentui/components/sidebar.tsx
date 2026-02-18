@@ -4,23 +4,11 @@ import { cn } from "@/lib/utils";
 import type { ChatSession } from "@/lib/chat-store";
 import { Button } from "@/components/ui/button";
 import {
-  ModelSelector,
-  ModelSelectorTrigger,
-  ModelSelectorContent,
-  ModelSelectorInput,
-  ModelSelectorList,
-  ModelSelectorEmpty,
-  ModelSelectorGroup,
-  ModelSelectorItem,
-  ModelSelectorLogo,
-  ModelSelectorName,
-} from "@/components/ai-elements/model-selector";
-import {
   PlusIcon,
   Trash2Icon,
   PanelLeftCloseIcon,
   MessageSquareIcon,
-  ChevronDownIcon,
+  LogOutIcon,
 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
@@ -32,6 +20,7 @@ interface SidebarProps {
   onNewChat: () => void;
   onSelectSession: (id: string) => void;
   onDeleteSession: (id: string) => void;
+  onLogout?: () => void;
 }
 
 export function Sidebar({
@@ -42,6 +31,7 @@ export function Sidebar({
   onNewChat,
   onSelectSession,
   onDeleteSession,
+  onLogout,
 }: SidebarProps) {
   if (!open) return null;
 
@@ -49,7 +39,7 @@ export function Sidebar({
     <div className="flex h-full w-64 flex-col border-r bg-muted/30">
       {/* Header */}
       <div className="flex items-center justify-between border-b px-3 py-3">
-        <span className="text-sm font-semibold">Agent 311</span>
+        <span className="text-sm font-semibold">Agent Austin</span>
         <div className="flex items-center gap-1">
           <Button variant="ghost" size="icon" onClick={onNewChat} className="h-7 w-7">
             <PlusIcon className="h-4 w-4" />
@@ -90,34 +80,18 @@ export function Sidebar({
         </div>
       </ScrollArea>
 
-      {/* Model selector (placeholder) */}
+      {/* Footer with logout */}
       <div className="border-t p-3">
-        <ModelSelector>
-          <ModelSelectorTrigger asChild>
-            <Button
-              variant="outline"
-              className="w-full justify-between text-sm"
-            >
-              <div className="flex items-center gap-2">
-                <ModelSelectorLogo provider="anthropic" />
-                <span>Claude (Agent 311)</span>
-              </div>
-              <ChevronDownIcon className="h-3.5 w-3.5 text-muted-foreground" />
-            </Button>
-          </ModelSelectorTrigger>
-          <ModelSelectorContent>
-            <ModelSelectorInput placeholder="Search models..." />
-            <ModelSelectorList>
-              <ModelSelectorEmpty>No models found.</ModelSelectorEmpty>
-              <ModelSelectorGroup heading="Available">
-                <ModelSelectorItem value="claude">
-                  <ModelSelectorLogo provider="anthropic" />
-                  <ModelSelectorName>Claude (Agent 311)</ModelSelectorName>
-                </ModelSelectorItem>
-              </ModelSelectorGroup>
-            </ModelSelectorList>
-          </ModelSelectorContent>
-        </ModelSelector>
+        {onLogout && (
+          <Button
+            variant="ghost"
+            className="w-full justify-start gap-2 text-sm text-muted-foreground hover:text-foreground"
+            onClick={onLogout}
+          >
+            <LogOutIcon className="h-4 w-4" />
+            Log Out
+          </Button>
+        )}
       </div>
     </div>
   );

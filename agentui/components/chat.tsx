@@ -1,21 +1,23 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import type { ChatMessage } from "@/lib/types";
 import { Sidebar } from "@/components/sidebar";
 import { ChatMessages } from "@/components/chat-messages";
 import { ChatInput } from "@/components/chat-input";
 import { ArtifactPanel } from "@/components/artifact-panel";
 import { API_URL } from "@/lib/config";
+import { isLoggedIn, authFetch, logout } from "@/lib/auth";
 import {
-  type ChatSession,
-  createSession,
-  deleteSession,
-  getSession,
-  getSessions,
-  saveSession,
+  type ApiSession,
+  fetchSessions,
+  fetchSession,
+  createSessionApi,
+  deleteSessionApi,
+  updateSessionTitle,
   titleFromFirstMessage,
-} from "@/lib/chat-store";
+} from "@/lib/session-api";
 
 const VIEW_CONTENT_TOOL_RE = /\[Using tool:\s*view_content\s+([^\]\n]+)\](?:\\n|\n)?/g;
 
@@ -24,6 +26,13 @@ interface FetchFileResponse {
   language: string;
   sizeBytes: number;
   content: string;
+}
+
+interface LocalSession {
+  id: string;
+  title: string;
+  createdAt: string | null;
+  updatedAt: string | null;
 }
 
 function normalizeToolPath(rawPath: string): string {
@@ -52,10 +61,10 @@ function buildArtifactCodeFence(file: FetchFileResponse): string {
 }
 
 export function Chat() {
-  const [sessions, setSessions] = useState<ChatSession[]>([]);
-  const [currentSession, setCurrentSession] = useState<ChatSession | null>(
-    null
-  );
+  const router = useRouter();
+  const [sessions, setSessions] = useState<LocalSession[]>([]);
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  const [currentTitle, setCurrentTitle] = useState("New Chat");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
@@ -63,59 +72,103 @@ export function Chat() {
   const [artifactCode, setArtifactCode] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
-  // Load sessions on mount
+  // Auth check + load sessions on mount
   useEffect(() => {
-    const loaded = getSessions();
-    setSessions(loaded);
-    if (loaded.length > 0) {
-      setCurrentSession(loaded[0]);
-      setMessages(loaded[0].messages);
-    } else {
-      const s = createSession();
-      saveSession(s);
-      setCurrentSession(s);
-      setSessions([s]);
+    if (!isLoggedIn()) {
+      router.replace("/login");
+      return;
+    }
+    loadSessions();
+  }, [router]);
+
+  async function loadSessions() {
+    try {
+      const loaded = await fetchSessions();
+      setSessions(loaded);
+      if (loaded.length > 0) {
+        setCurrentSessionId(loaded[0].id);
+        setCurrentTitle(loaded[0].title);
+        // Load messages for first session
+        const full = await fetchSession(loaded[0].id);
+        setMessages(full.messages ?? []);
+      } else {
+        // Create a new session
+        const id = crypto.randomUUID();
+        await createSessionApi(id, "New Chat");
+        const refreshed = await fetchSessions();
+        setSessions(refreshed);
+        setCurrentSessionId(id);
+        setCurrentTitle("New Chat");
+        setMessages([]);
+      }
+    } catch {
+      // If fetch fails (e.g. token expired), redirect to login
+      router.replace("/login");
+    }
+  }
+
+  async function refreshSessionList() {
+    try {
+      const loaded = await fetchSessions();
+      setSessions(loaded);
+    } catch {
+      // ignore
+    }
+  }
+
+  const handleNewChat = useCallback(async () => {
+    const id = crypto.randomUUID();
+    try {
+      await createSessionApi(id, "New Chat");
+      setCurrentSessionId(id);
+      setCurrentTitle("New Chat");
+      setMessages([]);
+      setArtifactCode(null);
+      await refreshSessionList();
+    } catch {
+      // ignore
     }
   }, []);
 
-  const refreshSessions = useCallback(() => {
-    setSessions(getSessions());
-  }, []);
-
-  const handleNewChat = useCallback(() => {
-    const s = createSession();
-    saveSession(s);
-    setCurrentSession(s);
-    setMessages([]);
-    setArtifactCode(null);
-    refreshSessions();
-  }, [refreshSessions]);
-
-  const handleSelectSession = useCallback((id: string) => {
-    const s = getSession(id);
-    if (s) {
-      setCurrentSession(s);
-      setMessages(s.messages);
+  const handleSelectSession = useCallback(async (id: string) => {
+    try {
+      const full = await fetchSession(id);
+      setCurrentSessionId(id);
+      setCurrentTitle(full.title);
+      setMessages(full.messages ?? []);
       setArtifactCode(null);
+    } catch {
+      // ignore
     }
   }, []);
 
   const handleDeleteSession = useCallback(
-    (id: string) => {
-      deleteSession(id);
-      const remaining = getSessions();
-      setSessions(remaining);
-      if (currentSession?.id === id) {
-        if (remaining.length > 0) {
-          setCurrentSession(remaining[0]);
-          setMessages(remaining[0].messages);
-        } else {
-          handleNewChat();
+    async (id: string) => {
+      try {
+        await deleteSessionApi(id);
+        const remaining = await fetchSessions();
+        setSessions(remaining);
+        if (currentSessionId === id) {
+          if (remaining.length > 0) {
+            const full = await fetchSession(remaining[0].id);
+            setCurrentSessionId(remaining[0].id);
+            setCurrentTitle(remaining[0].title);
+            setMessages(full.messages ?? []);
+          } else {
+            await handleNewChat();
+          }
         }
+      } catch {
+        // ignore
       }
     },
-    [currentSession, handleNewChat]
+    [currentSessionId, handleNewChat]
   );
+
+  const handleLogout = useCallback(() => {
+    logout();
+    router.replace("/login");
+  }, [router]);
 
   const handleStop = useCallback(() => {
     abortRef.current?.abort();
@@ -124,7 +177,7 @@ export function Chat() {
 
   const handleSubmit = useCallback(
     async (text: string) => {
-      if (!text.trim() || !currentSession) return;
+      if (!text.trim() || !currentSessionId) return;
 
       const userMessage: ChatMessage = {
         id: crypto.randomUUID(),
@@ -137,8 +190,11 @@ export function Chat() {
       setInput("");
 
       // Update title from first message
-      if (messages.length === 0) {
-        currentSession.title = titleFromFirstMessage(text);
+      const isFirstMessage = messages.length === 0;
+      if (isFirstMessage) {
+        const newTitle = titleFromFirstMessage(text);
+        setCurrentTitle(newTitle);
+        updateSessionTitle(currentSessionId, newTitle).catch(() => {});
       }
 
       // Create assistant message placeholder
@@ -157,7 +213,7 @@ export function Chat() {
       abortRef.current = controller;
 
       try {
-        const res = await fetch(`${API_URL}/api/chat`, {
+        const res = await authFetch(`${API_URL}/api/chat`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -165,6 +221,9 @@ export function Chat() {
               role: m.role,
               content: m.content,
             })),
+            session_id: currentSessionId,
+            user_msg_id: userMessage.id,
+            assistant_msg_id: assistantId,
           }),
           signal: controller.signal,
         });
@@ -231,16 +290,15 @@ export function Chat() {
           }
         }
 
-        // Save session
-        const finalMessages = [
-          ...updatedMessages,
-          { ...assistantMessage, content: finalText },
-        ];
-        setMessages(finalMessages);
-        currentSession.messages = finalMessages;
-        currentSession.updatedAt = Date.now();
-        saveSession(currentSession);
-        refreshSessions();
+        // Update local state with final text
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantId ? { ...m, content: finalText } : m
+          )
+        );
+
+        // Refresh session list to pick up updated timestamps
+        await refreshSessionList();
       } catch (err) {
         if ((err as Error).name !== "AbortError") {
           const errorText = `Error: ${(err as Error).message}`;
@@ -257,19 +315,29 @@ export function Chat() {
         abortRef.current = null;
       }
     },
-    [currentSession, messages, refreshSessions]
+    [currentSessionId, messages]
   );
+
+  // Build session objects compatible with sidebar
+  const sidebarSessions = sessions.map((s) => ({
+    id: s.id,
+    title: s.id === currentSessionId ? currentTitle : s.title,
+    messages: [] as ChatMessage[],
+    createdAt: s.createdAt ? new Date(s.createdAt).getTime() : Date.now(),
+    updatedAt: s.updatedAt ? new Date(s.updatedAt).getTime() : Date.now(),
+  }));
 
   return (
     <div className="flex h-dvh overflow-hidden bg-background">
       <Sidebar
-        sessions={sessions}
-        currentSessionId={currentSession?.id ?? null}
+        sessions={sidebarSessions}
+        currentSessionId={currentSessionId}
         open={sidebarOpen}
         onToggle={() => setSidebarOpen((o) => !o)}
         onNewChat={handleNewChat}
         onSelectSession={handleSelectSession}
         onDeleteSession={handleDeleteSession}
+        onLogout={handleLogout}
       />
 
       <div className="flex flex-1 flex-col overflow-hidden">
@@ -294,7 +362,7 @@ export function Chat() {
               </svg>
             </button>
             <span className="ml-3 text-sm font-medium">
-              {currentSession?.title ?? "Agent 311"}
+              {currentTitle ?? "Agent Austin"}
             </span>
           </div>
         )}

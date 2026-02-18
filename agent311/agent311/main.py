@@ -1,6 +1,8 @@
 import json
 import logging
 import uuid
+from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from pathlib import Path
 
 logging.basicConfig(level=logging.INFO)
@@ -15,11 +17,36 @@ from claude_agent_sdk import (
     create_sdk_mcp_server,
     tool,
 )
-from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
-app = FastAPI()
+from agent311.auth import (
+    create_token,
+    get_current_user,
+    verify_credentials,
+)
+from agent311.db import (
+    Message,
+    Session,
+    create_tables,
+    get_async_session,
+    get_db,
+)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await create_tables()
+    logger.info("Database tables created")
+    yield
+
+
+app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -139,12 +166,10 @@ def _extract_text(msg: dict) -> str:
     - Old format: {"role": "user", "content": "hello"}
     - AI SDK v6:  {"role": "user", "parts": [{"type": "text", "text": "hello"}]}
     """
-    # Try "content" first (old frontend / simple format)
     content = msg.get("content")
     if isinstance(content, str) and content:
         return content
 
-    # Try "parts" array (AI SDK v6 UIMessage format)
     parts = msg.get("parts", [])
     if parts:
         texts = []
@@ -156,8 +181,8 @@ def _extract_text(msg: dict) -> str:
     return ""
 
 
-async def _stream_chat(messages: list):
-    """Stream chat responses using Claude Agent SDK."""
+async def _stream_chat(messages: list, session_id: str | None, user_msg_id: str | None, assistant_msg_id: str | None):
+    """Stream chat responses using Claude Agent SDK. Persists messages to DB."""
     msg_id = str(uuid.uuid4())
 
     # Extract the last user message as the prompt
@@ -205,6 +230,7 @@ async def _stream_chat(messages: list):
     yield f"data: {json.dumps({'type': 'start', 'messageId': msg_id})}\n\n"
     yield f"data: {json.dumps({'type': 'text-start', 'id': msg_id})}\n\n"
 
+    full_text = ""
     try:
         async with ClaudeSDKClient(options=options) as client:
             await client.query(prompt)
@@ -212,6 +238,7 @@ async def _stream_chat(messages: list):
                 if isinstance(message, AssistantMessage):
                     for block in message.content:
                         if isinstance(block, TextBlock):
+                            full_text += block.text
                             yield f"data: {json.dumps({'type': 'text-delta', 'id': msg_id, 'delta': block.text})}\n\n"
                         elif isinstance(block, ToolUseBlock):
                             if block.name == "mcp__agent311_host__view_content":
@@ -219,15 +246,172 @@ async def _stream_chat(messages: list):
                                 path_value = block_input.get("path")
                                 if isinstance(path_value, str) and path_value.strip():
                                     marker = f"[Using tool: view_content {path_value}]\\n"
+                                    full_text += marker
                                     yield f"data: {json.dumps({'type': 'text-delta', 'id': msg_id, 'delta': marker})}\n\n"
                                     continue
-                            yield f"data: {json.dumps({'type': 'text-delta', 'id': msg_id, 'delta': f'[Using tool: {block.name}]\\n'})}\n\n"
+                            tool_marker = f"[Using tool: {block.name}]\\n"
+                            full_text += tool_marker
+                            yield f"data: {json.dumps({'type': 'text-delta', 'id': msg_id, 'delta': tool_marker})}\n\n"
     except Exception as e:
-        yield f"data: {json.dumps({'type': 'text-delta', 'id': msg_id, 'delta': f'Error: {str(e)}'})}\n\n"
+        error_text = f"Error: {str(e)}"
+        full_text += error_text
+        yield f"data: {json.dumps({'type': 'text-delta', 'id': msg_id, 'delta': error_text})}\n\n"
 
     yield f"data: {json.dumps({'type': 'text-end', 'id': msg_id})}\n\n"
     yield f"data: {json.dumps({'type': 'finish'})}\n\n"
     yield "data: [DONE]\n\n"
+
+    # Persist assistant message to DB after streaming completes
+    if session_id and full_text:
+        try:
+            async with get_async_session()() as db:
+                db_msg = Message(
+                    id=assistant_msg_id or str(uuid.uuid4()),
+                    session_id=session_id,
+                    role="assistant",
+                    content=full_text,
+                )
+                db.add(db_msg)
+                # Update session timestamp
+                result = await db.execute(select(Session).where(Session.id == session_id))
+                sess = result.scalar_one_or_none()
+                if sess:
+                    sess.updated_at = datetime.now(timezone.utc)
+                await db.commit()
+        except Exception:
+            logger.exception("Failed to save assistant message to DB")
+
+
+# ─── Auth endpoint ───────────────────────────────────────────────────────────
+
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+@app.post("/api/auth/login")
+async def login(body: LoginRequest):
+    if not verify_credentials(body.email, body.password):
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    token = create_token(body.email)
+    return {"token": token}
+
+
+# ─── Session CRUD endpoints ─────────────────────────────────────────────────
+
+
+class CreateSessionRequest(BaseModel):
+    id: str
+    title: str = "New Chat"
+
+
+class UpdateSessionRequest(BaseModel):
+    title: str
+
+
+@app.get("/api/sessions")
+async def list_sessions(
+    user: str = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(Session).order_by(Session.updated_at.desc())
+    )
+    sessions = result.scalars().all()
+    return [
+        {
+            "id": s.id,
+            "title": s.title,
+            "createdAt": s.created_at.isoformat() if s.created_at else None,
+            "updatedAt": s.updated_at.isoformat() if s.updated_at else None,
+        }
+        for s in sessions
+    ]
+
+
+@app.get("/api/sessions/{session_id}")
+async def get_session(
+    session_id: str,
+    user: str = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(Session)
+        .options(selectinload(Session.messages))
+        .where(Session.id == session_id)
+    )
+    session = result.scalar_one_or_none()
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return {
+        "id": session.id,
+        "title": session.title,
+        "createdAt": session.created_at.isoformat() if session.created_at else None,
+        "updatedAt": session.updated_at.isoformat() if session.updated_at else None,
+        "messages": [
+            {
+                "id": m.id,
+                "role": m.role,
+                "content": m.content,
+                "createdAt": m.created_at.isoformat() if m.created_at else None,
+            }
+            for m in session.messages
+        ],
+    }
+
+
+@app.post("/api/sessions")
+async def create_session_endpoint(
+    body: CreateSessionRequest,
+    user: str = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    session = Session(id=body.id, title=body.title)
+    db.add(session)
+    await db.commit()
+    await db.refresh(session)
+    return {
+        "id": session.id,
+        "title": session.title,
+        "createdAt": session.created_at.isoformat() if session.created_at else None,
+        "updatedAt": session.updated_at.isoformat() if session.updated_at else None,
+    }
+
+
+@app.patch("/api/sessions/{session_id}")
+async def update_session(
+    session_id: str,
+    body: UpdateSessionRequest,
+    user: str = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(select(Session).where(Session.id == session_id))
+    session = result.scalar_one_or_none()
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    session.title = body.title
+    session.updated_at = datetime.now(timezone.utc)
+    await db.commit()
+    return {"ok": True}
+
+
+@app.delete("/api/sessions/{session_id}")
+async def delete_session(
+    session_id: str,
+    user: str = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(select(Session).where(Session.id == session_id))
+    session = result.scalar_one_or_none()
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    await db.delete(session)
+    await db.commit()
+    return {"ok": True}
+
+
+# ─── Existing endpoints ─────────────────────────────────────────────────────
 
 
 @app.get("/")
@@ -248,16 +432,55 @@ async def fetch_file(path: str = Query(..., description="Absolute path to a prev
 
 
 @app.post("/api/chat")
-async def chat(request: Request):
+async def chat(
+    request: Request,
+    user: str = Depends(get_current_user),
+):
     body = await request.json()
     messages = body.get("messages", [])
-    logger.info(f"=== /api/chat received {len(messages)} messages ===")
+    session_id = body.get("session_id")
+    user_msg_id = body.get("user_msg_id")
+    assistant_msg_id = body.get("assistant_msg_id")
+
+    logger.info(f"=== /api/chat received {len(messages)} messages, session_id={session_id} ===")
     for i, msg in enumerate(messages):
         role = msg.get("role", "?")
         text = _extract_text(msg)
         logger.info(f"  msg[{i}] role={role} text={text[:200]}")
+
+    # Persist user message and auto-create session if needed
+    if session_id:
+        try:
+            async with get_async_session()() as db:
+                # Auto-create session if it doesn't exist
+                result = await db.execute(select(Session).where(Session.id == session_id))
+                sess = result.scalar_one_or_none()
+                if not sess:
+                    sess = Session(id=session_id, title="New Chat")
+                    db.add(sess)
+
+                # Save user message
+                if user_msg_id and messages:
+                    last_user = None
+                    for msg in reversed(messages):
+                        if msg.get("role") == "user":
+                            last_user = msg
+                            break
+                    if last_user:
+                        db_msg = Message(
+                            id=user_msg_id,
+                            session_id=session_id,
+                            role="user",
+                            content=_extract_text(last_user),
+                        )
+                        db.add(db_msg)
+
+                await db.commit()
+        except Exception:
+            logger.exception("Failed to save user message to DB")
+
     return StreamingResponse(
-        _stream_chat(messages),
+        _stream_chat(messages, session_id, user_msg_id, assistant_msg_id),
         media_type="text/event-stream",
         headers={
             "x-vercel-ai-ui-message-stream": "v1",
