@@ -69,49 +69,6 @@ options = ClaudeAgentOptions(
 | `WebSearch` | Search the web for real-time information |
 | `WebFetch` | Fetch and process content from URLs |
 
-### 2. Filesystem Skills (Skill tool + setting_sources)
-
-Skills are markdown files that give the agent specialized instructions. They live in the `.claude/skills/` directory relative to `cwd` and are auto-discovered when `setting_sources` includes `"project"`.
-
-```
-agent311/
-├── .claude/
-│   └── skills/
-│       └── hello-world/
-│           └── SKILL.md
-├── main.py
-└── __init__.py
-```
-
-#### Skill file format
-
-Skills use YAML frontmatter + markdown instructions:
-
-```markdown
----
-name: hello-world
-description: >
-  A simple hello world skill for testing the agent311 skill system.
-  Use when the user asks to "test skills", "demo skills", or "run hello world skill".
-version: 1.0.0
----
-
-# Hello World Skill
-
-This skill demonstrates that agent311 can load and execute skills from its `.claude/skills/` directory.
-
-## Instructions
-
-When this skill is triggered:
-
-1. Greet the user warmly
-2. Confirm that the skill system is working
-3. Mention that this skill was loaded from `agent311/.claude/skills/hello-world/SKILL.md`
-4. List any other available skills if the user asks
-```
-
-The `description` field in frontmatter tells the agent when to use the skill. The markdown body contains the instructions the agent follows when the skill is invoked.
-
 ## Adding a New Skill
 
 ### Step 1: Create the skill directory and file
@@ -327,19 +284,6 @@ Tool names follow the pattern `mcp__<server>__<tool>` when registered via MCP se
 - **@tool + MCP server** — for programmatic tools that need to run Python code
 
 agent311 currently uses only filesystem skills and built-in tools. Custom `@tool` tools can be added later when data querying capabilities are needed.
-
-## Skills Separation: agent311 vs Claude Code CLI
-
-These are two completely separate skill directories:
-
-| | Claude Code CLI (your laptop) | agent311 (FastAPI service) |
-|---|---|---|
-| **Skills location** | `.claude/skills/` (repo root) | `agent311/.claude/skills/` |
-| **Loaded by** | Claude Code CLI directly | Agent SDK via `setting_sources=["project"]` |
-| **Example** | `railway-deploy` | `hello-world` |
-| **Trigger** | You type `/railway-deploy` in CLI | User asks agent311 in chat |
-
-Adding a skill to `.claude/skills/` (repo root) does NOT make it available in agent311, and vice versa.
 
 ## Gotchas: Railway Deployment
 
