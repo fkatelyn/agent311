@@ -10,6 +10,7 @@ dependencies = [
     "uvicorn",
     "sqlalchemy[asyncio]>=2.0",
     "asyncpg>=0.30",
+    "aiosqlite>=0.20",
     "pyjwt>=2.0",
 ]
 
