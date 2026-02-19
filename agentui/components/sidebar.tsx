@@ -148,16 +148,6 @@ export function Sidebar({
           <Button variant="ghost" size="icon" onClick={onNewChat} className="h-7 w-7">
             <PlusIcon className="h-4 w-4" />
           </Button>
-          {currentSessionId && mode === "chats" && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7 text-muted-foreground hover:text-destructive"
-              onClick={() => setDeleteTargetId(currentSessionId)}
-            >
-              <Trash2Icon className="h-4 w-4" />
-            </Button>
-          )}
           <Button variant="ghost" size="icon" onClick={onToggle} className="h-7 w-7">
             <PanelLeftCloseIcon className="h-4 w-4" />
           </Button>
