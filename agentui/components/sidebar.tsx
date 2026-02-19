@@ -67,7 +67,7 @@ export function Sidebar({
         onClick={() => onSelectSession(session.id)}
       >
         <MessageSquareIcon className="h-3.5 w-3.5 shrink-0" />
-        <span className="min-w-0 flex-1 truncate">{session.title.length > 20 ? session.title.slice(0, 20) + "…" : session.title}</span>
+        <span className="min-w-0 flex-1 truncate">{session.title}</span>
         <button
           onClick={(e) => {
             e.stopPropagation();
