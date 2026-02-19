@@ -1,8 +1,0 @@
-[variables]
-VITE_API_URL = "https://agent311-production.up.railway.app"
-
-[build]
-cmd = "npm install && npm run build"
-
-[start]
-cmd = "npx serve dist"
