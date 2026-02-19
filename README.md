@@ -4,142 +4,154 @@ Austin 311 Data Science Agent — a full-stack application for exploring Austin 
 
 ## Architecture
 
-- **Backend:** FastAPI + Claude Agent SDK (streaming chat endpoint)
-- **Frontend 1:** Next.js + [assistant-ui](https://github.com/assistant-ui/assistant-ui) (markdown, syntax highlighting, streaming)
-- **Frontend 2:** React + Vite (custom SSE chat implementation)
+- **Backend:** FastAPI + Claude Agent SDK (streaming chat, JWT auth, PostgreSQL persistence)
+- **Frontend:** Next.js 16 + AI Elements + Streamdown (markdown, syntax highlighting, artifact preview)
+- **Database:** PostgreSQL (chat sessions + messages)
 - **Package Manager:** uv (Python), npm (JavaScript)
 - **Deployment:** Railway (Nixpacks builder)
 
-The backend exposes a `/api/chat` endpoint that streams AI responses using Server-Sent Events (SSE). Both frontends connect to the same backend — the assistant-ui frontend uses the AI SDK v6 data stream protocol while the Vite frontend uses custom SSE parsing.
+The backend exposes a `/api/chat` endpoint that streams AI responses using Server-Sent Events (SSE) in Vercel AI SDK v6 format. The frontend connects to the backend via JWT-authenticated requests and renders responses with live markdown streaming.
 
 ## Quick Start
 
 ### Backend (FastAPI)
 
 ```bash
-# From repo root
-uv run uvicorn agent311.main:app --host 0.0.0.0 --port 8000
+cd agent311
 
-# Or with auto-reload
+# Set environment variables
+export ANTHROPIC_API_KEY=sk-ant-...
+export DATABASE_URL=postgresql://...
+export JWT_SECRET=your-secret-key
+
+# Run dev server
 uv run uvicorn agent311.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-API will be available at http://localhost:8000
+API available at http://localhost:8000
 
-### Frontend — assistant-ui (Next.js)
+### Frontend (Next.js)
 
 ```bash
-cd assistantui
+cd agentui
 npm install
 npm run dev
 ```
 
-Available at http://localhost:3000
-
-### Frontend — Vite (React)
-
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-Available at http://localhost:5173
+Available at http://localhost:3000. Log in with `default@agentaustin.org` / `password`.
 
 ## Project Structure
 
 ```
 agent311/
-├── agent311/              # Python backend package
-│   ├── __init__.py
-│   └── main.py           # FastAPI app with streaming chat endpoint
-├── assistantui/           # Next.js + assistant-ui frontend
+├── agent311/              # Backend Python package
+│   ├── agent311/
+│   │   ├── main.py        # FastAPI app, all endpoints, SSE streaming, MCP tools
+│   │   ├── db.py          # SQLAlchemy async ORM, Session/Message models
+│   │   └── auth.py        # JWT authentication
+│   ├── .claude/
+│   │   └── skills/        # Claude Code skills (download-311-data, analyze-311-data, visualize, etc.)
+│   ├── pyproject.toml     # Python dependencies (uv)
+│   ├── nixpacks.toml      # Railway build config
+│   ├── railway.json       # Railway builder config
+│   └── start.sh           # Startup: download 311 data → start uvicorn
+├── agentui/               # Next.js frontend
 │   ├── app/
-│   │   ├── assistant.tsx  # Runtime config (API URL)
-│   │   ├── layout.tsx
-│   │   └── page.tsx
-│   ├── components/        # assistant-ui components
-│   ├── package.json
-│   ├── nixpacks.toml      # assistantui Railway config
-│   └── railway.json       # Config-as-code for this service
-├── frontend/              # React/Vite frontend
-│   ├── src/
-│   │   ├── App.jsx        # Chat UI with custom SSE streaming
-│   │   ├── App.css
-│   │   └── main.jsx
-│   ├── package.json
-│   ├── vite.config.js
-│   └── nixpacks.toml      # Frontend Railway config
+│   │   ├── page.tsx       # Chat page
+│   │   └── login/         # Login page
+│   ├── components/
+│   │   ├── chat.tsx           # Main orchestrator (SSE, state, layout)
+│   │   ├── chat-messages.tsx  # Message rendering + tool summary + artifact cards
+│   │   ├── sidebar.tsx        # Session list, favorites, delete
+│   │   ├── artifact-panel.tsx # Preview panel (iframe/JSX + resizable)
+│   │   ├── chat-input.tsx     # PromptInput wrapper
+│   │   └── ai-elements/       # AI Elements components (Message, PromptInput, etc.)
+│   ├── lib/
+│   │   ├── session-api.ts     # Backend session CRUD API calls
+│   │   ├── auth.ts            # JWT login + authFetch wrapper
+│   │   ├── config.ts          # API_URL config
+│   │   └── types.ts           # ChatMessage type
+│   ├── nixpacks.toml          # Railway build config
+│   └── package.json
 ├── docs/                  # Documentation
-│   ├── railway-deployment-guide.md
-│   ├── railway-nextjs-assistantui.md
-│   └── git-and-gh-guide.md
-├── pyproject.toml         # Python deps (must be at root)
-├── uv.lock                # uv lockfile (must be at root)
-├── nixpacks.toml          # Backend Railway config
-├── railway.json           # Railway builder config
-├── start.sh               # Local dev startup script
+│   ├── agentui-frontend.md          # Frontend architecture guide
+│   ├── agent-sdk-guide.md           # Claude Agent SDK integration
+│   ├── view-content-artifact-viewer.md  # Artifact preview design
+│   ├── railway-deployment-guide.md  # Complete Railway deployment guide
+│   └── ...
 ├── CLAUDE.md              # Development guidelines
 └── README.md
 ```
 
-## Development
+## Features
 
-### Add Python Dependencies
-
-```bash
-uv add <package-name>
-uv sync
-```
-
-### Build Frontend for Production
-
-```bash
-cd frontend
-npm run build
-npm run preview  # Test production build locally
-```
+- **Streaming AI chat** — Claude Agent SDK with real-time SSE streaming
+- **Artifact preview** — Agent writes HTML/JSX to `/tmp/`, frontend renders it in a split panel
+- **Session persistence** — Chat history stored in PostgreSQL with title, favorites, delete
+- **JWT auth** — Token-based login (single-user, hardcoded credentials)
+- **Built-in tools** — Read, Write, Edit, Bash, WebSearch, WebFetch, Task
+- **Skills** — Filesystem skills for downloading, analyzing, and visualizing Austin 311 data
 
 ## Deployment
 
-This project uses Railway for deployment with three services in a monorepo.
+Two Railway services in a monorepo:
 
-**Backend Service (agent311):**
-- Automatically detected via root `pyproject.toml` + `uv.lock`
-- Uses Nixpacks with uv (version pinned in `nixpacks.toml`)
-- Start command: `python -m uvicorn agent311.main:app --host 0.0.0.0 --port ${PORT}`
+**Backend service (`agent311/`):**
+- Root Directory: `/agent311` (set in Railway dashboard)
+- Nixpacks auto-detects uv via `pyproject.toml` + `uv.lock`
+- Installs Claude Code CLI at build time (`npm install -g @anthropic-ai/claude-code`)
+- Start: `bash start.sh` (downloads fresh 311 data, starts uvicorn)
+- Required env vars: `DATABASE_URL`, `JWT_SECRET`, `ANTHROPIC_API_KEY`
 
-**assistant-ui Frontend (assistantui):**
-- Next.js 16 with assistant-ui components
-- Root directory: `/assistantui` (set in Railway dashboard)
-- Requires Node.js 20+ (`engines` field in package.json)
-- Backend URL configured via `NEXT_PUBLIC_API_URL`
+**Frontend service (`agentui/`):**
+- Root Directory: `/agentui` (set in Railway dashboard)
+- Nixpacks Node.js provider, builds with `npm run build`
+- Required env var: `NEXT_PUBLIC_API_URL` (backend URL)
 
-**Vite Frontend (frontend):**
-- Built with `npm install && npm run build`
-- Served with `npx serve dist`
-- Backend API URL configured via `VITE_API_URL` env var
+See [docs/railway-deployment-guide.md](docs/railway-deployment-guide.md) for full instructions.
 
-See [docs/railway-deployment-guide.md](docs/railway-deployment-guide.md) for complete deployment instructions, and [docs/railway-nextjs-assistantui.md](docs/railway-nextjs-assistantui.md) for assistant-ui-specific pitfalls.
+## API Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/auth/login` | Get JWT token |
+| `POST` | `/api/chat` | Stream chat response (SSE) |
+| `GET` | `/api/sessions` | List all sessions |
+| `POST` | `/api/sessions` | Create session |
+| `GET` | `/api/sessions/{id}` | Get session with messages |
+| `PATCH` | `/api/sessions/{id}` | Update title or favorite |
+| `DELETE` | `/api/sessions/{id}` | Delete session |
+| `GET` | `/api/fetch_file` | Fetch file for preview (restricted to `/tmp/`) |
+
+### `POST /api/chat`
+
+**Request:**
+```json
+{
+  "messages": [{ "role": "user", "content": "What's the top 311 complaint in Austin?" }],
+  "session_id": "uuid"
+}
+```
+
+**Response:** SSE stream
+```
+data: {"type":"start","messageId":"..."}
+data: {"type":"text-start","id":"..."}
+data: {"type":"text-delta","id":"...","delta":"The top complaint is..."}
+data: {"type":"text-end","id":"..."}
+data: {"type":"finish"}
+data: [DONE]
+```
 
 ## Documentation
 
-- **[Railway Deployment Guide](docs/railway-deployment-guide.md)** - Complete guide for deploying Python/FastAPI, React, Next.js, and Docker services on Railway
-- **[Railway FastAPI Setup](docs/railway-fastapi-setup.md)** - Detailed FastAPI + uv deployment walkthrough
-- **[Railway React Frontend](docs/railway-react-frontend.md)** - Deploying the Vite React frontend on Railway
-- **[Railway Next.js assistant-ui](docs/railway-nextjs-assistantui.md)** - Deploying assistant-ui in a monorepo subdirectory (all pitfalls documented)
-- **[Claude Agent SDK Guide](docs/agent-sdk-guide.md)** - Integrating the Claude Agent SDK with FastAPI
-- **[View Content Artifact Viewer](docs/view-content-artifact-viewer.md)** - Host file preview design, flow diagrams, and streaming event contract
-- **[Git and GitHub CLI Guide](docs/git-and-gh-guide.md)** - Practical guide for using git and gh CLI
-- **[CLAUDE.md](CLAUDE.md)** - Development context and guidelines for working with this codebase
-
-## Tech Stack
-
-- **Backend:** Python 3.12, FastAPI, uvicorn, Claude Agent SDK
-- **Frontend 1:** Next.js 16, assistant-ui, AI SDK v6
-- **Frontend 2:** React 19, Vite 6
-- **Deployment:** Railway (Nixpacks)
-- **Package Management:** uv (Python), npm (JavaScript)
+- **[Frontend Architecture](docs/agentui-frontend.md)** — Component breakdown, SSE parsing, artifact preview
+- **[Claude Agent SDK Guide](docs/agent-sdk-guide.md)** — SDK integration, skills, custom MCP tools, Railway gotchas
+- **[View Content Artifact Viewer](docs/view-content-artifact-viewer.md)** — How the agent exposes files for frontend preview
+- **[Railway Deployment Guide](docs/railway-deployment-guide.md)** — Complete guide for deploying on Railway
+- **[Railway FastAPI Setup](docs/railway-fastapi-setup.md)** — FastAPI + uv deployment walkthrough
+- **[Railway Next.js](docs/railway-nextjs-assistantui.md)** — Next.js deployment pitfalls
+- **[Git and GitHub CLI Guide](docs/git-and-gh-guide.md)** — Practical git + gh CLI reference
 
 ## Austin 311 Data Source
 
@@ -147,70 +159,36 @@ Austin 311 service request data is available through the **City of Austin Open D
 
 ### What is Austin 311?
 
-**Austin 311** is the City of Austin's non-emergency service request system. Residents use it to report issues, request city services, and get information about city programs. It's a single point of contact for all city services that aren't emergencies.
+**Austin 311** is the City of Austin's non-emergency service request system. Residents use it to report issues, request city services, and get information about city programs.
 
 **How to Use 311:**
 - **Phone:** Call 3-1-1 (or 512-974-2000 from outside Austin)
 - **Web:** https://311.austin.gov
 - **Mobile App:** Austin 311 (iOS/Android)
-- **Text:** Text "ATX" to 512-974-2000
-
-### Example Use Cases
-
-**1. Report a Pothole:**
-```
-1. Call 311 or use the mobile app
-2. Provide location: "2100 Barton Springs Rd near Zilker Park"
-3. Describe: "Large pothole in right lane, approx 2ft wide"
-4. Receive SR number: 24-00123456
-5. Track status online or via app
-6. Average repair time: 3-5 business days
-```
-
-**2. Request Bulky Item Pickup:**
-```
-1. Go to 311.austin.gov or call 311
-2. Select "Austin Resource Recovery" → "Bulky Item Collection"
-3. Schedule pickup date (next available collection day)
-4. List items: old couch, mattress, desk
-5. Place items curbside by 6:30 AM on collection day
-6. Pickup completed within scheduled window
-```
-
-**3. Report Code Violation (Overgrown Vegetation):**
-```
-1. Submit via 311 app or website
-2. Upload photo of overgrown lot
-3. Provide address: "123 Main St"
-4. Inspector assigned within 2-3 days
-5. Notice sent to property owner
-6. Follow-up inspection after 10-day compliance period
-7. Track case status via SR number
-```
-
-**4. Report Street Light Outage:**
-```
-1. Use 311 mobile app
-2. Select "Transportation & Public Works" → "Street Light Outage"
-3. Tap location on map or enter nearest address
-4. Note pole number if visible (e.g., "Pole #12345")
-5. Austin Energy notified automatically
-6. Typical repair: 3-7 business days
-```
 
 ### Data API
 
-**Austin 311 Unified Dataset:**
-- **Portal:** https://data.austintexas.gov
 - **Dataset:** [311 Unified Data](https://data.austintexas.gov/City-Government/311-Unified-Data/i26j-ai4z)
 - **API Endpoint:** `https://data.austintexas.gov/resource/i26j-ai4z.json`
 - **Format:** JSON via Socrata Open Data API (SODA)
-- **Size:** ~7.8M rows (2014-present, growing daily)
-- **Update Frequency:** Real-time
+- **Size:** ~7.8M rows (2014–present, updated daily)
+
+### Dataset Schema
+
+```
+service_request_sr_number    # Unique SR ID (e.g., 24-00123456)
+sr_type_code                 # Service request type
+sr_description               # Free-text description
+method_received              # Phone, Web, Mobile, etc.
+sr_status                    # New, Closed, Duplicate
+created_date                 # Request creation timestamp
+close_date                   # Resolution timestamp
+sr_location                  # Address or intersection
+latitude / longitude         # Geocoded coordinates
+council_district             # City council district (1-10)
+```
 
 ### Service Request Categories
-
-The dataset includes all 311 service requests across Austin:
 
 | Category | Example Services | Volume |
 |----------|-----------------|--------|
@@ -221,24 +199,6 @@ The dataset includes all 311 service requests across Austin:
 | **Austin Water** | Water leaks, pressure issues, billing | ~8% |
 | **Other** | Parks, libraries, health, development | ~22% |
 
-### Dataset Schema
-
-Key fields in the 311 dataset:
-
-```
-service_request_sr_number    # Unique SR ID (e.g., 24-00123456)
-sr_type_code                 # Service request type
-sr_description               # Free-text description
-method_received              # Phone, Web, Mobile, etc.
-sr_status                    # New, Closed, Duplicate
-created_date                 # Request creation timestamp
-last_update_date             # Last status update
-close_date                   # Resolution timestamp
-sr_location                  # Address or intersection
-latitude / longitude         # Geocoded coordinates
-council_district             # City council district (1-10)
-```
-
 ### API Usage Example
 
 ```bash
@@ -247,51 +207,20 @@ curl "https://data.austintexas.gov/resource/i26j-ai4z.json?\$where=created_date>
 
 # Get potholes by council district
 curl "https://data.austintexas.gov/resource/i26j-ai4z.json?sr_type_code=POTHOLE&council_district=5"
-
-# Count requests by type
-curl "https://data.austintexas.gov/resource/i26j-ai4z.json?\$select=sr_type_code,count(*)&\$group=sr_type_code"
 ```
 
-### Socrata API Documentation
+## Tech Stack
 
-- **API Docs:** https://dev.socrata.com/foundry/data.austintexas.gov/i26j-ai4z
-- **SoQL Query Language:** https://dev.socrata.com/docs/queries/
-- **Rate Limits:** 1,000 requests/day (unauthenticated), 100,000/day (with app token)
-- **App Token:** Register at https://data.austintexas.gov/profile/app_tokens
-
-### Data Stats (as of 2024)
-
-- **Total Records:** ~7.8 million service requests
-- **Date Range:** January 2014 - Present
-- **Daily Volume:** ~1,500-2,000 new requests per day
-- **Average Response Time:** 3-5 business days (varies by department)
-- **Peak Request Types:** Code Compliance (overgrown vegetation), ARR (missed collection)
-
-## API Endpoints
-
-### `POST /api/chat`
-
-Stream chat responses using Server-Sent Events (SSE).
-
-**Request:**
-```json
-{
-  "messages": [
-    { "role": "user", "content": "What is the average response time?" }
-  ]
-}
-```
-
-**Response:** SSE stream with Vercel AI SDK protocol format
-```
-data: {"type":"start","messageId":"..."}
-data: {"type":"text-start","id":"..."}
-data: {"type":"text-delta","id":"...","delta":"Hello"}
-data: {"type":"text-delta","id":"...","delta":" there"}
-data: {"type":"text-end","id":"..."}
-data: {"type":"finish"}
-data: [DONE]
-```
+| Layer | Technology |
+|-------|-----------|
+| Backend | Python 3.12, FastAPI, uvicorn |
+| AI | Claude Agent SDK, Claude Code CLI |
+| Database | PostgreSQL, SQLAlchemy async, asyncpg |
+| Auth | JWT (PyJWT, HS256) |
+| Frontend | Next.js 16, React 19, Tailwind CSS 4 |
+| UI | AI Elements, shadcn/ui, Streamdown |
+| Deployment | Railway, Nixpacks |
+| Package mgmt | uv (Python), npm (JavaScript) |
 
 ## License
 

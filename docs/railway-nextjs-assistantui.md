@@ -1,5 +1,7 @@
 # Deploying Next.js assistant-ui on Railway (Monorepo Subdirectory)
 
+> **Note:** This doc captures the original three-service architecture (backend + Vite frontend + assistantui). The project has since consolidated to two services: `agent311/` (backend) and `agentui/` (the Next.js frontend, successor to `assistantui/`). The Vite `frontend/` service has been removed. The pitfalls documented here still apply to deploying Next.js on Railway.
+
 This documents deploying the [assistant-ui](https://github.com/assistant-ui/assistant-ui) Next.js frontend as a third Railway service alongside the existing FastAPI backend and Vite frontend. It covers every pitfall encountered during the real deployment.
 
 ## Architecture

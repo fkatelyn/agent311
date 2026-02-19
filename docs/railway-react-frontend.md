@@ -1,5 +1,7 @@
 # Deploying the React Frontend on Railway
 
+> **Note:** The Vite React `frontend/` service has been removed from this project. The current frontend is `agentui/` (Next.js). This doc is kept as a reference for deploying Vite React apps on Railway.
+
 This documents deploying the Vite React frontend as a separate Railway service and connecting it to the FastAPI backend.
 
 ## Architecture

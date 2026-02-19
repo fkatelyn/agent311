@@ -13,10 +13,11 @@ The key difference from the raw Anthropic API:
 ## Architecture
 
 ```
-Frontend (React) → POST /api/chat → FastAPI → ClaudeSDKClient → Claude Code CLI → Claude API
-                                                    ↕
-                                          Built-in tools (Read, Write, Bash, etc.)
-                                          Filesystem skills (agent311/.claude/skills/)
+Frontend (Next.js) → POST /api/chat → FastAPI → ClaudeSDKClient → Claude Code CLI → Claude API
+                                                      ↕
+                                            Built-in tools (Read, Write, Bash, etc.)
+                                            Filesystem skills (agent311/.claude/skills/)
+                                            Custom MCP tools (view_content, etc.)
 ```
 
 Each chat request:
@@ -32,6 +33,10 @@ dependencies = [
     "claude-agent-sdk",
     "fastapi",
     "uvicorn",
+    "sqlalchemy[asyncio]",
+    "asyncpg",
+    "pyjwt",
+    "matplotlib",
 ]
 ```
 
@@ -283,7 +288,7 @@ Tool names follow the pattern `mcp__<server>__<tool>` when registered via MCP se
 - **Filesystem skills** — for instruction-based behaviors (prompts, workflows, guidelines)
 - **@tool + MCP server** — for programmatic tools that need to run Python code
 
-agent311 currently uses only filesystem skills and built-in tools. Custom `@tool` tools can be added later when data querying capabilities are needed.
+agent311 uses both filesystem skills and a custom MCP tool: `view_content` (lets the agent expose files for frontend artifact preview). See [view-content-artifact-viewer.md](view-content-artifact-viewer.md) for details.
 
 ## Gotchas: Railway Deployment
 
@@ -366,22 +371,30 @@ The Agent SDK reads this environment variable automatically.
 ## Testing Locally
 
 ```bash
+# Set required env vars
+export ANTHROPIC_API_KEY=sk-ant-...
+export DATABASE_URL=postgresql://...
+export JWT_SECRET=your-secret
+
 # Start the server
+cd agent311
 uv run uvicorn agent311.main:app --reload --host 0.0.0.0 --port 8000
+
+# Get a JWT token first
+TOKEN=$(curl -s -X POST http://localhost:8000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"default@agentaustin.org","password":"password"}' | jq -r .token)
 
 # Test a skill
 curl -N -X POST http://localhost:8000/api/chat \
   -H "Content-Type: application/json" \
-  -d '{"messages":[{"role":"user","content":"Run the hello world skill"}]}'
-
-# Test web search
-curl -N -X POST http://localhost:8000/api/chat \
-  -H "Content-Type: application/json" \
-  -d '{"messages":[{"role":"user","content":"Search for latest Austin 311 news"}]}'
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"messages":[{"role":"user","content":"Download the latest 311 data"}]}'
 
 # Test regular chat
 curl -N -X POST http://localhost:8000/api/chat \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
   -d '{"messages":[{"role":"user","content":"What is Austin 311?"}]}'
 ```
 

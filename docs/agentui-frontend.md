@@ -28,7 +28,7 @@ Live URL: `https://agentui-production.up.railway.app`
 - **Framework:** Next.js 16 (App Router, Turbopack)
 - **Styling:** Tailwind CSS 4 + shadcn/ui
 - **Markdown:** Streamdown (via AI Elements `MessageResponse`)
-- **Chat persistence:** localStorage
+- **Chat persistence:** PostgreSQL (via backend API)
 - **Backend communication:** Custom SSE fetch (not AI SDK `useChat`)
 - **Deployment:** Railway (Nixpacks, Node.js provider)
 
@@ -62,9 +62,10 @@ The root component managing all state and layout.
 
 **Message flow:**
 1. User types in PromptInput, calls `handleSubmit(text)`
-2. POST to `${API_URL}/api/chat` with messages array
+2. POST to `${API_URL}/api/chat` with messages array + session_id (JWT auth header)
 3. Stream `text-delta` events, accumulate into assistant message
-4. On completion, save session to localStorage
+4. Detects `[Using tool: view_content <path>]` markers, fetches file via `/api/fetch_file`, appends code block
+5. On completion, session/messages are already persisted to PostgreSQL by the backend
 
 ### `chat-messages.tsx` — Message List with Parsing
 
@@ -136,7 +137,7 @@ A mouse-drag handle on the left edge of the panel:
 Left panel (256px) with:
 
 - **Header:** "Agent 311" title, New Chat (+) button, collapse button
-- **Session list:** Scrollable list of saved sessions, sorted by most recent. Active session highlighted. Delete button appears on hover.
+- **Session list:** Scrollable list of sessions from PostgreSQL, sorted by most recent. Favorites pinned to top. Active session highlighted. Star button to toggle favorite. Delete button with confirmation dialog on hover.
 - **Model selector:** AI Elements `ModelSelector` at bottom (placeholder — single "Claude (Agent 311)" option)
 
 ### `chat-input.tsx` — Input Area
@@ -148,21 +149,29 @@ Wraps AI Elements `PromptInput` with:
 
 ## Library Files
 
-### `lib/chat-store.ts` — Session Persistence
+### `lib/session-api.ts` — Backend Session API
 
-localStorage-based CRUD under key `"agentui-sessions"`:
+REST API calls to backend PostgreSQL session endpoints (all authenticated via `authFetch`):
 
 ```typescript
-interface ChatSession {
-  id: string;        // crypto.randomUUID()
-  title: string;     // Auto-generated from first message (60 char max)
-  messages: ChatMessage[];
-  createdAt: number;
-  updatedAt: number;
+interface ApiSession {
+  id: string;
+  title: string;
+  createdAt: string | null;
+  updatedAt: string | null;
+  isFavorite: boolean;
+  messages?: ChatMessage[];
 }
 ```
 
-Functions: `getSessions()`, `getSession(id)`, `saveSession()`, `deleteSession()`, `createSession()`, `titleFromFirstMessage()`
+Functions: `fetchSessions()`, `fetchSession(id)`, `createSessionApi(id, title)`, `updateSessionTitle(id, title)`, `toggleFavoriteApi(id, isFavorite)`, `deleteSessionApi(id)`, `titleFromFirstMessage(text)`
+
+### `lib/auth.ts` — JWT Auth
+
+JWT token stored in localStorage under key `"agentui-token"`:
+- `login()` — POST to `/api/auth/login` with hardcoded credentials, stores returned token
+- `authFetch(url, options)` — Wraps `fetch` with `Authorization: Bearer <token>` header; redirects to `/login` on 401
+- `getToken()`, `setToken()`, `clearToken()`, `isLoggedIn()`, `logout()`
 
 ### `lib/types.ts` — Message Type
 
@@ -174,7 +183,7 @@ interface ChatMessage {
 }
 ```
 
-Custom type instead of AI SDK's `UIMessage` (which only has `parts`, no `content` field in v6).
+Custom type (instead of AI SDK's `UIMessage`, which only has `parts` in v6, not `content`).
 
 ### `lib/config.ts` — API URL
 
@@ -225,7 +234,8 @@ agentui/
 │       └── ...
 ├── lib/
 │   ├── config.ts               # API_URL
-│   ├── chat-store.ts           # localStorage session CRUD
+│   ├── session-api.ts          # Backend session CRUD (fetchSessions, createSessionApi, etc.)
+│   ├── auth.ts                 # JWT login, token storage, authFetch wrapper
 │   ├── types.ts                # ChatMessage type
 │   └── utils.ts                # cn() utility
 ├── nixpacks.toml               # Railway deployment config
