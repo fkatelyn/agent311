@@ -20,7 +20,7 @@ from claude_agent_sdk import (
 )
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -502,6 +502,42 @@ async def list_reports(user: str = Depends(get_current_user)):
 
     files.sort(key=lambda x: x["modifiedAt"], reverse=True)
     return {"files": files}
+
+
+DOWNLOAD_MEDIA_TYPES = {
+    ".html": "text/html",
+    ".htm": "text/html",
+    ".png": "image/png",
+    ".csv": "text/csv",
+}
+
+
+@app.get("/api/reports/download")
+async def download_report(
+    path: str = Query(..., description="Absolute path to report file"),
+    user: str = Depends(get_current_user),
+):
+    try:
+        file_path = Path(path).resolve(strict=True)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="File not found")
+
+    if not file_path.is_file():
+        raise HTTPException(status_code=404, detail="Not a file")
+
+    if not file_path.is_relative_to(REPORTS_DIR.resolve()):
+        raise HTTPException(status_code=403, detail="File is outside reports directory")
+
+    ext = file_path.suffix.lower()
+    if ext not in ALLOWED_REPORT_EXTENSIONS:
+        raise HTTPException(status_code=400, detail=f"Unsupported file type: {ext}")
+
+    media_type = DOWNLOAD_MEDIA_TYPES.get(ext, "application/octet-stream")
+    return FileResponse(
+        path=str(file_path),
+        media_type=media_type,
+        filename=file_path.name,
+    )
 
 
 # ─── Existing endpoints ─────────────────────────────────────────────────────

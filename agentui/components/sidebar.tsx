@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import type { ChatSession } from "@/lib/chat-store";
 import type { ReportFile } from "@/lib/reports-api";
@@ -49,6 +49,8 @@ interface SidebarProps {
   onModeChange: (mode: SidebarMode) => void;
   reports: ReportFile[];
   onSelectReport: (report: ReportFile) => void;
+  width: number;
+  onWidthChange: (width: number) => void;
 }
 
 function fileIcon(type: string) {
@@ -78,8 +80,31 @@ export function Sidebar({
   onModeChange,
   reports,
   onSelectReport,
+  width,
+  onWidthChange,
 }: SidebarProps) {
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
+  const dragging = useRef(false);
+
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    dragging.current = true;
+    const onMouseMove = (e: MouseEvent) => {
+      if (!dragging.current) return;
+      onWidthChange(Math.min(480, Math.max(200, e.clientX)));
+    };
+    const onMouseUp = () => {
+      dragging.current = false;
+      document.removeEventListener("mousemove", onMouseMove);
+      document.removeEventListener("mouseup", onMouseUp);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    document.addEventListener("mousemove", onMouseMove);
+    document.addEventListener("mouseup", onMouseUp);
+  }, [onWidthChange]);
 
   if (!open) return null;
 
@@ -131,7 +156,14 @@ export function Sidebar({
   }
 
   return (
-    <div className="flex h-full w-64 min-w-0 flex-col border-r bg-muted/30 overflow-hidden">
+    <div className="relative flex h-full min-w-0 flex-col border-r bg-muted/30 overflow-hidden" style={{ width }}>
+      {/* Drag handle */}
+      <div
+        onMouseDown={handleMouseDown}
+        className="absolute -right-1 top-0 z-10 flex h-full w-3 cursor-col-resize items-center justify-center hover:bg-primary/10"
+      >
+        <div className="h-8 w-1 rounded-full bg-muted-foreground/40" />
+      </div>
       {/* Header */}
       <div className="flex items-center justify-between border-b px-3 py-3">
         <span className="text-sm font-semibold">Agent Austin</span>

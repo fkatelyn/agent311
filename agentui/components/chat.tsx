@@ -82,7 +82,9 @@ export function Chat() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [artifactCode, setArtifactCode] = useState<string | null>(null);
+  const [activeReport, setActiveReport] = useState<ReportFile | null>(null);
   const [sidebarMode, setSidebarMode] = useState<SidebarMode>("chats");
+  const [sidebarWidth, setSidebarWidth] = useState(256);
   const [reports, setReports] = useState<ReportFile[]>([]);
   const abortRef = useRef<AbortController | null>(null);
 
@@ -148,6 +150,7 @@ export function Chat() {
       setCurrentTitle("New Chat");
       setMessages([]);
       setArtifactCode(null);
+      setActiveReport(null);
       setSidebarMode("chats");
       await refreshSessionList();
     } catch {
@@ -162,6 +165,7 @@ export function Chat() {
       setCurrentTitle(full.title);
       setMessages(full.messages ?? []);
       setArtifactCode(null);
+      setActiveReport(null);
     } catch {
       // ignore
     }
@@ -220,6 +224,7 @@ export function Chat() {
       } else {
         setArtifactCode(data.content);
       }
+      setActiveReport(report);
     } catch {
       // ignore
     }
@@ -400,6 +405,8 @@ export function Chat() {
         onModeChange={setSidebarMode}
         reports={reports}
         onSelectReport={handleSelectReport}
+        width={sidebarWidth}
+        onWidthChange={setSidebarWidth}
       />
 
       <div className="flex flex-1 flex-col overflow-hidden">
@@ -435,7 +442,10 @@ export function Chat() {
             <ChatMessages
               messages={messages}
               isStreaming={isStreaming}
-              onOpenPreview={setArtifactCode}
+              onOpenPreview={(code) => {
+                setArtifactCode(code);
+                setActiveReport(null);
+              }}
             />
             <ChatInput
               input={input}
@@ -450,7 +460,12 @@ export function Chat() {
           {artifactCode && (
             <ArtifactPanel
               code={artifactCode}
-              onClose={() => setArtifactCode(null)}
+              onClose={() => {
+                setArtifactCode(null);
+                setActiveReport(null);
+              }}
+              reportName={activeReport?.name}
+              reportPath={activeReport?.path}
             />
           )}
         </div>

@@ -22,11 +22,16 @@ import {
   CodeBlockActions,
 } from "@/components/ai-elements/code-block";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { DownloadIcon } from "lucide-react";
+import { API_URL } from "@/lib/config";
+import { authFetch } from "@/lib/auth";
 import type { BundledLanguage } from "shiki";
 
 interface ArtifactPanelProps {
   code: string;
   onClose: () => void;
+  reportName?: string;
+  reportPath?: string;
 }
 
 function isFullHtmlDocument(code: string): boolean {
@@ -50,7 +55,7 @@ function HtmlIframePreview({ code }: { code: string }) {
   );
 }
 
-export function ArtifactPanel({ code, onClose }: ArtifactPanelProps) {
+export function ArtifactPanel({ code, onClose, reportName, reportPath }: ArtifactPanelProps) {
   const [tab, setTab] = useState("preview");
   const [width, setWidth] = useState(40);
   const dragging = useRef(false);
@@ -58,6 +63,24 @@ export function ArtifactPanel({ code, onClose }: ArtifactPanelProps) {
   const isHtml = !isImage && isFullHtmlDocument(code);
   const codeLanguage: BundledLanguage = isHtml ? "html" : "tsx";
   const fileName = isHtml ? "page.html" : "component.tsx";
+
+  const handleDownload = useCallback(async () => {
+    if (!reportPath) return;
+    try {
+      const res = await authFetch(
+        `${API_URL}/api/reports/download?path=${encodeURIComponent(reportPath)}`
+      );
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = reportName || "report";
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      // ignore download errors
+    }
+  }, [reportPath, reportName]);
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -95,6 +118,15 @@ export function ArtifactPanel({ code, onClose }: ArtifactPanelProps) {
         <ArtifactHeader>
           <ArtifactTitle>{title}</ArtifactTitle>
           <ArtifactActions>
+            {reportPath && (
+              <button
+                onClick={handleDownload}
+                className="inline-flex items-center justify-center rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+                title="Download report"
+              >
+                <DownloadIcon className="h-4 w-4" />
+              </button>
+            )}
             <ArtifactClose onClick={onClose} />
           </ArtifactActions>
         </ArtifactHeader>
