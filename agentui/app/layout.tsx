@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Agent Austin",
-  description: "Austin 311 Data Science Agent",
+  description: "City of Austin Data Science Agent",
   robots: {
     index: false,
     follow: false,

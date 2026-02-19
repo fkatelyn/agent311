@@ -35,7 +35,7 @@ export function ChatInput({
           <PromptInputTextarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Ask about Austin 311 data..."
+            placeholder="Ask about City of Austin 311 data..."
           />
           <PromptInputFooter>
             <div />

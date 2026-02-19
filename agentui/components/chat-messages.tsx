@@ -174,9 +174,9 @@ export function ChatMessages({
     return (
       <div className="flex flex-1 items-center justify-center p-8">
         <div className="text-center">
-          <h2 className="mb-2 text-xl font-semibold">Agent 311</h2>
+          <h2 className="mb-2 text-xl font-semibold">Agent Austin</h2>
           <p className="text-sm text-muted-foreground">
-            Austin 311 Data Science Agent. Ask me about service requests, trends,
+            City of Austin Data Science Agent. Ask me about Austin 311 service requests, trends,
             or data analysis.
           </p>
         </div>
