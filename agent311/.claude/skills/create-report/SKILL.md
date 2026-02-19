@@ -135,7 +135,7 @@ For raw data dumps:
 
 ## Workflow
 
-1. Read and analyze the data (from `/tmp/agent311_data/311_recent.csv` or Socrata API)
+1. Read and analyze the data (use the path from your system prompt for the local CSV, or the Socrata API for historical data)
 2. Compute aggregations and statistics using Python
 3. Generate the report content (HTML with embedded data)
 4. Call `save_report` to save the file

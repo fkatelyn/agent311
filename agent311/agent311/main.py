@@ -1,6 +1,7 @@
 import base64
 import json
 import logging
+import os
 import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
@@ -40,7 +41,8 @@ from agent311.db import (
 )
 
 
-REPORTS_DIR = Path("/tmp/agent311_data/reports")
+_volume_mount = os.environ.get("RAILWAY_VOLUME_MOUNT_PATH", "/tmp/agent311_data")
+REPORTS_DIR = Path(_volume_mount) / "reports"
 
 
 @asynccontextmanager
@@ -61,7 +63,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-SYSTEM_PROMPT = """You are Agent 311, an AI assistant specializing in Austin 311 service request data.
+CSV_PATH = Path(_volume_mount) / "311_recent.csv"
+
+SYSTEM_PROMPT = f"""You are Agent 311, an AI assistant specializing in Austin 311 service request data.
 
 You help users explore and analyze Austin's 311 service requests, which include:
 - Code Compliance (overgrown vegetation, junk vehicles, illegal dumping)
@@ -81,7 +85,7 @@ You can discuss:
 - Data trends and statistics
 - How to access the public dataset via Socrata API
 
-You have a local CSV file at /tmp/agent311_data/311_recent.csv containing the past 7 days of 311 service requests, downloaded fresh on startup. Use the Read tool to access this file when users ask about recent 311 data. The CSV columns are: sr_number, sr_type_desc, sr_department_desc, sr_method_received_desc, sr_status_desc, sr_status_date, sr_created_date, sr_updated_date, sr_closed_date, sr_location, sr_location_street_number, sr_location_street_name, sr_location_city, sr_location_zip_code, sr_location_county, sr_location_x, sr_location_y, sr_location_lat, sr_location_long, sr_location_lat_long, sr_location_council_district, sr_location_map_page, sr_location_map_tile.
+You have a local CSV file at {CSV_PATH} containing the past 7 days of 311 service requests, downloaded fresh on startup. Use the Read tool to access this file when users ask about recent 311 data. The CSV columns are: sr_number, sr_type_desc, sr_department_desc, sr_method_received_desc, sr_status_desc, sr_status_date, sr_created_date, sr_updated_date, sr_closed_date, sr_location, sr_location_street_number, sr_location_street_name, sr_location_city, sr_location_zip_code, sr_location_county, sr_location_x, sr_location_y, sr_location_lat, sr_location_long, sr_location_lat_long, sr_location_council_district, sr_location_map_page, sr_location_map_tile.
 
 For older data or complex queries, use the Socrata API: https://data.austintexas.gov/resource/xwdj-i9he.csv (or .json). Use $where, $limit, $order, $select, $group parameters.
 
