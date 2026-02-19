@@ -3,7 +3,7 @@
   "packages": {
     "node": "18"
   },
-  "buildAptPackages": ["gcc", "postgresql-client"],
+  "buildAptPackages": ["gcc", "postgresql-client", "curl"],
   "steps": {
     "install-cli": {
       "inputs": [{ "step": "install" }],
