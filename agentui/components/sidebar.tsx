@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import type { ChatSession } from "@/lib/chat-store";
+import type { ReportFile } from "@/lib/reports-api";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -14,14 +15,25 @@ import {
   DialogClose,
 } from "@/components/ui/dialog";
 import {
+  FileTree,
+  FileTreeFolder,
+  FileTreeFile,
+} from "@/components/ai-elements/file-tree";
+import {
   PlusIcon,
   Trash2Icon,
   PanelLeftCloseIcon,
   MessageSquareIcon,
   LogOutIcon,
   StarIcon,
+  FolderOpenIcon,
+  FileTextIcon,
+  ImageIcon,
+  TableIcon,
 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
+
+export type SidebarMode = "chats" | "files";
 
 interface SidebarProps {
   sessions: (ChatSession & { isFavorite?: boolean })[];
@@ -33,6 +45,23 @@ interface SidebarProps {
   onDeleteSession: (id: string) => void;
   onToggleFavorite: (id: string, isFavorite: boolean) => void;
   onLogout?: () => void;
+  mode: SidebarMode;
+  onModeChange: (mode: SidebarMode) => void;
+  reports: ReportFile[];
+  onSelectReport: (report: ReportFile) => void;
+}
+
+function fileIcon(type: string) {
+  switch (type) {
+    case "html":
+      return <FileTextIcon className="size-4 text-orange-400" />;
+    case "png":
+      return <ImageIcon className="size-4 text-green-400" />;
+    case "csv":
+      return <TableIcon className="size-4 text-blue-400" />;
+    default:
+      return undefined;
+  }
 }
 
 export function Sidebar({
@@ -45,6 +74,10 @@ export function Sidebar({
   onDeleteSession,
   onToggleFavorite,
   onLogout,
+  mode,
+  onModeChange,
+  reports,
+  onSelectReport,
 }: SidebarProps) {
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
 
@@ -103,31 +136,80 @@ export function Sidebar({
       <div className="flex items-center justify-between border-b px-3 py-3">
         <span className="text-sm font-semibold">Agent Austin</span>
         <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => onModeChange(mode === "chats" ? "files" : "chats")}
+            className={cn("h-7 w-7", mode === "files" && "bg-accent text-accent-foreground")}
+            title={mode === "chats" ? "View reports" : "View chats"}
+          >
+            <FolderOpenIcon className="h-4 w-4" />
+          </Button>
           <Button variant="ghost" size="icon" onClick={onNewChat} className="h-7 w-7">
             <PlusIcon className="h-4 w-4" />
           </Button>
+          {currentSessionId && mode === "chats" && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-muted-foreground hover:text-destructive"
+              onClick={() => setDeleteTargetId(currentSessionId)}
+            >
+              <Trash2Icon className="h-4 w-4" />
+            </Button>
+          )}
           <Button variant="ghost" size="icon" onClick={onToggle} className="h-7 w-7">
             <PanelLeftCloseIcon className="h-4 w-4" />
           </Button>
         </div>
       </div>
 
-      {/* Session list */}
+      {/* Content area */}
       <ScrollArea className="flex-1">
-        <div className="flex flex-col gap-0.5 p-2">
-          {favorites.length > 0 && (
-            <>
-              <span className="px-2 pt-1 pb-0.5 text-xs font-medium text-muted-foreground">
-                Favorites
-              </span>
-              {favorites.map(renderSession)}
-              <span className="px-2 pt-2 pb-0.5 text-xs font-medium text-muted-foreground">
-                Recent
-              </span>
-            </>
-          )}
-          {recent.map(renderSession)}
-        </div>
+        {mode === "chats" ? (
+          <div className="flex flex-col gap-0.5 p-2">
+            {favorites.length > 0 && (
+              <>
+                <span className="px-2 pt-1 pb-0.5 text-xs font-medium text-muted-foreground">
+                  Favorites
+                </span>
+                {favorites.map(renderSession)}
+                <span className="px-2 pt-2 pb-0.5 text-xs font-medium text-muted-foreground">
+                  Recent
+                </span>
+              </>
+            )}
+            {recent.map(renderSession)}
+          </div>
+        ) : (
+          <div className="p-2">
+            <FileTree
+              defaultExpanded={new Set(["reports"])}
+              className="border-0 bg-transparent"
+              onSelect={(path) => {
+                const report = reports.find((r) => r.path === path);
+                if (report) onSelectReport(report);
+              }}
+            >
+              <FileTreeFolder path="reports" name="Reports">
+                {reports.length === 0 ? (
+                  <p className="px-2 py-2 text-xs text-muted-foreground">
+                    No reports yet.
+                  </p>
+                ) : (
+                  reports.map((r) => (
+                    <FileTreeFile
+                      key={r.path}
+                      path={r.path}
+                      name={r.name}
+                      icon={fileIcon(r.type)}
+                    />
+                  ))
+                )}
+              </FileTreeFolder>
+            </FileTree>
+          </div>
+        )}
       </ScrollArea>
 
       {/* Footer with logout */}

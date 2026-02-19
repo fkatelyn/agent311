@@ -34,6 +34,10 @@ function isFullHtmlDocument(code: string): boolean {
   return trimmed.startsWith("<!doctype") || trimmed.startsWith("<html");
 }
 
+function isDataUrl(code: string): boolean {
+  return code.startsWith("data:image/");
+}
+
 function HtmlIframePreview({ code }: { code: string }) {
   const srcDoc = useMemo(() => code, [code]);
   return (
@@ -50,7 +54,8 @@ export function ArtifactPanel({ code, onClose }: ArtifactPanelProps) {
   const [tab, setTab] = useState("preview");
   const [width, setWidth] = useState(40);
   const dragging = useRef(false);
-  const isHtml = isFullHtmlDocument(code);
+  const isImage = isDataUrl(code);
+  const isHtml = !isImage && isFullHtmlDocument(code);
   const codeLanguage: BundledLanguage = isHtml ? "html" : "tsx";
   const fileName = isHtml ? "page.html" : "component.tsx";
 
@@ -75,6 +80,8 @@ export function ArtifactPanel({ code, onClose }: ArtifactPanelProps) {
     document.addEventListener("mouseup", onMouseUp);
   }, []);
 
+  const title = isImage ? "Image Preview" : isHtml ? "HTML Preview" : "JSX Preview";
+
   return (
     <div className="relative min-w-[320px] border-l" style={{ width: `${width}%` }}>
       {/* Drag handle */}
@@ -86,64 +93,75 @@ export function ArtifactPanel({ code, onClose }: ArtifactPanelProps) {
       </div>
       <Artifact className="flex h-full flex-col rounded-none border-0">
         <ArtifactHeader>
-          <ArtifactTitle>{isHtml ? "HTML Preview" : "JSX Preview"}</ArtifactTitle>
+          <ArtifactTitle>{title}</ArtifactTitle>
           <ArtifactActions>
             <ArtifactClose onClick={onClose} />
           </ArtifactActions>
         </ArtifactHeader>
 
-        <Tabs
-          value={tab}
-          onValueChange={setTab}
-          className="flex flex-1 flex-col overflow-hidden"
-        >
-          <div className="border-b px-4">
-            <TabsList className="h-9 bg-transparent">
-              <TabsTrigger value="preview" className="text-xs">
-                Preview
-              </TabsTrigger>
-              <TabsTrigger value="code" className="text-xs">
-                Code
-              </TabsTrigger>
-            </TabsList>
-          </div>
-
-          <TabsContent
-            value="preview"
-            className="flex-1 overflow-auto p-0 mt-0"
+        {isImage ? (
+          <ArtifactContent className="flex h-full items-center justify-center overflow-auto p-4">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={code}
+              alt="Report preview"
+              className="max-h-full max-w-full object-contain"
+            />
+          </ArtifactContent>
+        ) : (
+          <Tabs
+            value={tab}
+            onValueChange={setTab}
+            className="flex flex-1 flex-col overflow-hidden"
           >
-            <ArtifactContent className="h-full">
-              {isHtml ? (
-                <HtmlIframePreview code={code} />
-              ) : (
-                <JSXPreview jsx={code}>
-                  <JSXPreviewContent className="min-h-[200px]" />
-                  <JSXPreviewError />
-                </JSXPreview>
-              )}
-            </ArtifactContent>
-          </TabsContent>
+            <div className="border-b px-4">
+              <TabsList className="h-9 bg-transparent">
+                <TabsTrigger value="preview" className="text-xs">
+                  Preview
+                </TabsTrigger>
+                <TabsTrigger value="code" className="text-xs">
+                  Code
+                </TabsTrigger>
+              </TabsList>
+            </div>
 
-          <TabsContent
-            value="code"
-            className="flex-1 overflow-auto p-0 mt-0"
-          >
-            <CodeBlock
-              code={code}
-              language={codeLanguage}
-              className="rounded-none border-0"
+            <TabsContent
+              value="preview"
+              className="flex-1 overflow-auto p-0 mt-0"
             >
-              <CodeBlockHeader>
-                <CodeBlockTitle>
-                  <span className="font-mono text-xs">{fileName}</span>
-                </CodeBlockTitle>
-                <CodeBlockActions>
-                  <CodeBlockCopyButton />
-                </CodeBlockActions>
-              </CodeBlockHeader>
-            </CodeBlock>
-          </TabsContent>
-        </Tabs>
+              <ArtifactContent className="h-full">
+                {isHtml ? (
+                  <HtmlIframePreview code={code} />
+                ) : (
+                  <JSXPreview jsx={code}>
+                    <JSXPreviewContent className="min-h-[200px]" />
+                    <JSXPreviewError />
+                  </JSXPreview>
+                )}
+              </ArtifactContent>
+            </TabsContent>
+
+            <TabsContent
+              value="code"
+              className="flex-1 overflow-auto p-0 mt-0"
+            >
+              <CodeBlock
+                code={code}
+                language={codeLanguage}
+                className="rounded-none border-0"
+              >
+                <CodeBlockHeader>
+                  <CodeBlockTitle>
+                    <span className="font-mono text-xs">{fileName}</span>
+                  </CodeBlockTitle>
+                  <CodeBlockActions>
+                    <CodeBlockCopyButton />
+                  </CodeBlockActions>
+                </CodeBlockHeader>
+              </CodeBlock>
+            </TabsContent>
+          </Tabs>
+        )}
       </Artifact>
     </div>
   );

@@ -1,3 +1,4 @@
+import base64
 import json
 import logging
 import uuid
@@ -39,10 +40,15 @@ from agent311.db import (
 )
 
 
+REPORTS_DIR = Path("/tmp/agent311_data/reports")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await create_tables()
     logger.info("Database tables created")
+    REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+    logger.info(f"Reports directory ready: {REPORTS_DIR}")
     yield
 
 
@@ -89,6 +95,8 @@ VIEWABLE_EXTENSIONS = {
     ".cjs": "javascript",
     ".jsx": "jsx",
     ".tsx": "tsx",
+    ".png": "png",
+    ".csv": "csv",
 }
 VIEWABLE_ROOTS = (Path("/tmp").resolve(),)
 MAX_VIEWABLE_BYTES = 200_000
@@ -128,12 +136,19 @@ def _load_viewable_file(path_value: str) -> dict:
             f"File is too large for preview ({size_bytes} bytes > {MAX_VIEWABLE_BYTES})."
         )
 
-    return {
+    result = {
         "path": str(file_path),
         "language": VIEWABLE_EXTENSIONS[ext],
         "sizeBytes": size_bytes,
-        "content": file_path.read_text(encoding="utf-8", errors="replace"),
     }
+
+    if ext == ".png":
+        result["content"] = base64.b64encode(file_path.read_bytes()).decode("ascii")
+        result["encoding"] = "base64"
+    else:
+        result["content"] = file_path.read_text(encoding="utf-8", errors="replace")
+
+    return result
 
 
 @tool(
@@ -155,9 +170,47 @@ async def view_content(args: dict):
     return {"content": [{"type": "text", "text": text}]}
 
 
+ALLOWED_REPORT_EXTENSIONS = {".html", ".png", ".csv"}
+
+
+@tool(
+    "save_report",
+    "Save an agent-generated report (HTML, PNG, or CSV) to the reports directory for user access.",
+    {"filename": str, "content": str, "encoding": str},
+)
+async def save_report(args: dict):
+    filename = str(args.get("filename", "")).strip()
+    content = str(args.get("content", ""))
+    encoding = str(args.get("encoding", "text")).strip().lower()
+
+    if not filename:
+        return {"content": [{"type": "text", "text": "Error: filename is required."}]}
+
+    # Sanitize: no path traversal
+    safe_name = Path(filename).name
+    if not safe_name or safe_name != filename or ".." in filename or "/" in filename:
+        return {"content": [{"type": "text", "text": f"Error: invalid filename '{filename}'. Use a simple name like 'report.html'."}]}
+
+    ext = Path(safe_name).suffix.lower()
+    if ext not in ALLOWED_REPORT_EXTENSIONS:
+        allowed = ", ".join(sorted(ALLOWED_REPORT_EXTENSIONS))
+        return {"content": [{"type": "text", "text": f"Error: unsupported extension '{ext}'. Allowed: {allowed}"}]}
+
+    file_path = REPORTS_DIR / safe_name
+
+    if encoding == "base64":
+        data = base64.b64decode(content)
+        file_path.write_bytes(data)
+    else:
+        file_path.write_text(content, encoding="utf-8")
+
+    size = file_path.stat().st_size
+    return {"content": [{"type": "text", "text": f"Report saved: {file_path} ({size} bytes)"}]}
+
+
 agent311_host_tools = create_sdk_mcp_server(
     name="agent311_host",
-    tools=[view_content],
+    tools=[view_content, save_report],
 )
 
 
@@ -221,6 +274,7 @@ async def _stream_chat(messages: list, session_id: str | None, user_msg_id: str 
             "WebSearch",
             "WebFetch",
             "mcp__agent311_host__view_content",
+            "mcp__agent311_host__save_report",
         ],
         permission_mode="acceptEdits",
         max_turns=60,
@@ -246,6 +300,14 @@ async def _stream_chat(messages: list, session_id: str | None, user_msg_id: str 
                                 path_value = block_input.get("path")
                                 if isinstance(path_value, str) and path_value.strip():
                                     marker = f"[Using tool: view_content {path_value}]\\n"
+                                    full_text += marker
+                                    yield f"data: {json.dumps({'type': 'text-delta', 'id': msg_id, 'delta': marker})}\n\n"
+                                    continue
+                            if block.name == "mcp__agent311_host__save_report":
+                                block_input = block.input if isinstance(block.input, dict) else {}
+                                fname = block_input.get("filename", "")
+                                if isinstance(fname, str) and fname.strip():
+                                    marker = f"[Using tool: save_report {fname}]\\n"
                                     full_text += marker
                                     yield f"data: {json.dumps({'type': 'text-delta', 'id': msg_id, 'delta': marker})}\n\n"
                                     continue
@@ -416,6 +478,30 @@ async def delete_session(
     await db.delete(session)
     await db.commit()
     return {"ok": True}
+
+
+# ─── Reports endpoint ───────────────────────────────────────────────────────
+
+
+@app.get("/api/reports")
+async def list_reports(user: str = Depends(get_current_user)):
+    if not REPORTS_DIR.exists():
+        return {"files": []}
+
+    files = []
+    for f in REPORTS_DIR.iterdir():
+        if f.is_file() and f.suffix.lower() in ALLOWED_REPORT_EXTENSIONS:
+            stat = f.stat()
+            files.append({
+                "name": f.name,
+                "path": str(f),
+                "type": f.suffix.lstrip(".").lower(),
+                "sizeBytes": stat.st_size,
+                "modifiedAt": datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).isoformat(),
+            })
+
+    files.sort(key=lambda x: x["modifiedAt"], reverse=True)
+    return {"files": files}
 
 
 # ─── Existing endpoints ─────────────────────────────────────────────────────

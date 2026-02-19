@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { ChatMessage } from "@/lib/types";
-import { Sidebar } from "@/components/sidebar";
+import { Sidebar, type SidebarMode } from "@/components/sidebar";
 import { ChatMessages } from "@/components/chat-messages";
 import { ChatInput } from "@/components/chat-input";
 import { ArtifactPanel } from "@/components/artifact-panel";
@@ -19,8 +19,14 @@ import {
   toggleFavoriteApi,
   titleFromFirstMessage,
 } from "@/lib/session-api";
+import {
+  type ReportFile,
+  fetchReports,
+  fetchReportContent,
+} from "@/lib/reports-api";
 
 const VIEW_CONTENT_TOOL_RE = /\[Using tool:\s*view_content\s+([^\]\n]+)\](?:\\n|\n)?/g;
+const SAVE_REPORT_TOOL_RE = /\[Using tool:\s*save_report\s+([^\]\n]+)\](?:\\n|\n)?/g;
 
 interface FetchFileResponse {
   path: string;
@@ -58,6 +64,10 @@ function extractViewContentPaths(text: string): string[] {
   return matches;
 }
 
+function hasSaveReportTool(text: string): boolean {
+  return SAVE_REPORT_TOOL_RE.test(text);
+}
+
 function buildArtifactCodeFence(file: FetchFileResponse): string {
   return `\n\n\`\`\`${file.language}\n${file.content}\n\`\`\`\n`;
 }
@@ -72,6 +82,8 @@ export function Chat() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [artifactCode, setArtifactCode] = useState<string | null>(null);
+  const [sidebarMode, setSidebarMode] = useState<SidebarMode>("chats");
+  const [reports, setReports] = useState<ReportFile[]>([]);
   const abortRef = useRef<AbortController | null>(null);
 
   // Auth check + load sessions on mount
@@ -81,7 +93,17 @@ export function Chat() {
       return;
     }
     loadSessions();
+    refreshReports();
   }, [router]);
+
+  async function refreshReports() {
+    try {
+      const loaded = await fetchReports();
+      setReports(loaded);
+    } catch {
+      // ignore
+    }
+  }
 
   async function loadSessions() {
     try {
@@ -126,6 +148,7 @@ export function Chat() {
       setCurrentTitle("New Chat");
       setMessages([]);
       setArtifactCode(null);
+      setSidebarMode("chats");
       await refreshSessionList();
     } catch {
       // ignore
@@ -187,6 +210,19 @@ export function Chat() {
   const handleStop = useCallback(() => {
     abortRef.current?.abort();
     setIsStreaming(false);
+  }, []);
+
+  const handleSelectReport = useCallback(async (report: ReportFile) => {
+    try {
+      const data = await fetchReportContent(report.path);
+      if (data.encoding === "base64" && report.type === "png") {
+        setArtifactCode(`data:image/png;base64,${data.content}`);
+      } else {
+        setArtifactCode(data.content);
+      }
+    } catch {
+      // ignore
+    }
   }, []);
 
   const handleSubmit = useCallback(
@@ -311,6 +347,12 @@ export function Chat() {
           )
         );
 
+        // If save_report was used, refresh reports and switch sidebar to files
+        if (hasSaveReportTool(fullText)) {
+          await refreshReports();
+          setSidebarMode("files");
+        }
+
         // Refresh session list to pick up updated timestamps
         await refreshSessionList();
       } catch (err) {
@@ -354,6 +396,10 @@ export function Chat() {
         onDeleteSession={handleDeleteSession}
         onToggleFavorite={handleToggleFavorite}
         onLogout={handleLogout}
+        mode={sidebarMode}
+        onModeChange={setSidebarMode}
+        reports={reports}
+        onSelectReport={handleSelectReport}
       />
 
       <div className="flex flex-1 flex-col overflow-hidden">
