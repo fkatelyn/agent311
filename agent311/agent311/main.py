@@ -170,7 +170,7 @@ async def view_content(args: dict):
     return {"content": [{"type": "text", "text": text}]}
 
 
-ALLOWED_REPORT_EXTENSIONS = {".html", ".png", ".csv"}
+ALLOWED_REPORT_EXTENSIONS = {".html", ".png", ".csv", ".pdf"}
 
 
 @tool(
@@ -509,6 +509,7 @@ DOWNLOAD_MEDIA_TYPES = {
     ".htm": "text/html",
     ".png": "image/png",
     ".csv": "text/csv",
+    ".pdf": "application/pdf",
 }
 
 

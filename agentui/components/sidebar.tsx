@@ -61,6 +61,8 @@ function fileIcon(type: string) {
       return <ImageIcon className="size-4 text-green-400" />;
     case "csv":
       return <TableIcon className="size-4 text-blue-400" />;
+    case "pdf":
+      return <FileTextIcon className="size-4 text-red-400" />;
     default:
       return undefined;
   }
