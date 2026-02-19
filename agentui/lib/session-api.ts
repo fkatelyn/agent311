@@ -7,6 +7,7 @@ export interface ApiSession {
   title: string;
   createdAt: string | null;
   updatedAt: string | null;
+  isFavorite: boolean;
   messages?: ChatMessage[];
 }
 
@@ -45,6 +46,18 @@ export async function updateSessionTitle(
     body: JSON.stringify({ title }),
   });
   if (!res.ok) throw new Error(`Failed to update session: ${res.status}`);
+}
+
+export async function toggleFavoriteApi(
+  id: string,
+  isFavorite: boolean
+): Promise<void> {
+  const res = await authFetch(`${API_URL}/api/sessions/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ is_favorite: isFavorite }),
+  });
+  if (!res.ok) throw new Error(`Failed to toggle favorite: ${res.status}`);
 }
 
 export async function deleteSessionApi(id: string): Promise<void> {

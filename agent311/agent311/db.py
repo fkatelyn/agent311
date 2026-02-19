@@ -2,7 +2,7 @@ import os
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import Column, DateTime, ForeignKey, String, Text, text
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, String, Text, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, relationship
 
@@ -53,6 +53,8 @@ class Session(Base):
         onupdate=lambda: datetime.now(timezone.utc),
     )
 
+    is_favorite = Column(Boolean, nullable=False, server_default=text("false"), default=False)
+
     messages = relationship(
         "Message", back_populates="session", cascade="all, delete-orphan", order_by="Message.created_at"
     )
@@ -81,6 +83,10 @@ async def create_tables():
     _init_engine()
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        # Add column if missing (safe for existing DB)
+        await conn.execute(text(
+            "ALTER TABLE sessions ADD COLUMN IF NOT EXISTS is_favorite BOOLEAN NOT NULL DEFAULT false"
+        ))
 
 
 def get_async_session():

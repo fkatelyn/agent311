@@ -307,7 +307,8 @@ class CreateSessionRequest(BaseModel):
 
 
 class UpdateSessionRequest(BaseModel):
-    title: str
+    title: str | None = None
+    is_favorite: bool | None = None
 
 
 @app.get("/api/sessions")
@@ -316,7 +317,7 @@ async def list_sessions(
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
-        select(Session).order_by(Session.updated_at.desc())
+        select(Session).order_by(Session.is_favorite.desc(), Session.updated_at.desc())
     )
     sessions = result.scalars().all()
     return [
@@ -325,6 +326,7 @@ async def list_sessions(
             "title": s.title,
             "createdAt": s.created_at.isoformat() if s.created_at else None,
             "updatedAt": s.updated_at.isoformat() if s.updated_at else None,
+            "isFavorite": s.is_favorite,
         }
         for s in sessions
     ]
@@ -349,6 +351,7 @@ async def get_session(
         "title": session.title,
         "createdAt": session.created_at.isoformat() if session.created_at else None,
         "updatedAt": session.updated_at.isoformat() if session.updated_at else None,
+        "isFavorite": session.is_favorite,
         "messages": [
             {
                 "id": m.id,
@@ -376,6 +379,7 @@ async def create_session_endpoint(
         "title": session.title,
         "createdAt": session.created_at.isoformat() if session.created_at else None,
         "updatedAt": session.updated_at.isoformat() if session.updated_at else None,
+        "isFavorite": session.is_favorite,
     }
 
 
@@ -390,7 +394,10 @@ async def update_session(
     session = result.scalar_one_or_none()
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
-    session.title = body.title
+    if body.title is not None:
+        session.title = body.title
+    if body.is_favorite is not None:
+        session.is_favorite = body.is_favorite
     session.updated_at = datetime.now(timezone.utc)
     await db.commit()
     return {"ok": True}

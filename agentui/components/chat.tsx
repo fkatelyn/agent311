@@ -16,6 +16,7 @@ import {
   createSessionApi,
   deleteSessionApi,
   updateSessionTitle,
+  toggleFavoriteApi,
   titleFromFirstMessage,
 } from "@/lib/session-api";
 
@@ -33,6 +34,7 @@ interface LocalSession {
   title: string;
   createdAt: string | null;
   updatedAt: string | null;
+  isFavorite: boolean;
 }
 
 function normalizeToolPath(rawPath: string): string {
@@ -163,6 +165,18 @@ export function Chat() {
       }
     },
     [currentSessionId, handleNewChat]
+  );
+
+  const handleToggleFavorite = useCallback(
+    async (id: string, isFavorite: boolean) => {
+      try {
+        await toggleFavoriteApi(id, isFavorite);
+        await refreshSessionList();
+      } catch {
+        // ignore
+      }
+    },
+    []
   );
 
   const handleLogout = useCallback(() => {
@@ -325,6 +339,7 @@ export function Chat() {
     messages: [] as ChatMessage[],
     createdAt: s.createdAt ? new Date(s.createdAt).getTime() : Date.now(),
     updatedAt: s.updatedAt ? new Date(s.updatedAt).getTime() : Date.now(),
+    isFavorite: s.isFavorite,
   }));
 
   return (
@@ -337,6 +352,7 @@ export function Chat() {
         onNewChat={handleNewChat}
         onSelectSession={handleSelectSession}
         onDeleteSession={handleDeleteSession}
+        onToggleFavorite={handleToggleFavorite}
         onLogout={handleLogout}
       />
 

@@ -9,17 +9,19 @@ import {
   PanelLeftCloseIcon,
   MessageSquareIcon,
   LogOutIcon,
+  StarIcon,
 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface SidebarProps {
-  sessions: ChatSession[];
+  sessions: (ChatSession & { isFavorite?: boolean })[];
   currentSessionId: string | null;
   open: boolean;
   onToggle: () => void;
   onNewChat: () => void;
   onSelectSession: (id: string) => void;
   onDeleteSession: (id: string) => void;
+  onToggleFavorite: (id: string, isFavorite: boolean) => void;
   onLogout?: () => void;
 }
 
@@ -31,9 +33,58 @@ export function Sidebar({
   onNewChat,
   onSelectSession,
   onDeleteSession,
+  onToggleFavorite,
   onLogout,
 }: SidebarProps) {
   if (!open) return null;
+
+  const favorites = sessions.filter((s) => s.isFavorite);
+  const recent = sessions.filter((s) => !s.isFavorite);
+
+  function renderSession(session: (typeof sessions)[number]) {
+    const isFav = !!session.isFavorite;
+    return (
+      <div
+        key={session.id}
+        className={cn(
+          "group flex items-center gap-2 rounded-md px-2 py-1.5 text-sm cursor-pointer",
+          session.id === currentSessionId
+            ? "bg-accent text-accent-foreground"
+            : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+        )}
+        onClick={() => onSelectSession(session.id)}
+      >
+        <MessageSquareIcon className="h-3.5 w-3.5 shrink-0" />
+        <span className="flex-1 truncate">{session.title}</span>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleFavorite(session.id, !isFav);
+          }}
+          className={cn(
+            "shrink-0 rounded p-0.5",
+            isFav
+              ? "text-yellow-500"
+              : "hidden text-muted-foreground hover:text-yellow-500 group-hover:block"
+          )}
+        >
+          <StarIcon
+            className="h-3.5 w-3.5"
+            fill={isFav ? "currentColor" : "none"}
+          />
+        </button>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onDeleteSession(session.id);
+          }}
+          className="hidden shrink-0 rounded p-0.5 text-muted-foreground hover:text-destructive group-hover:block"
+        >
+          <Trash2Icon className="h-3.5 w-3.5" />
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-full w-64 flex-col border-r bg-muted/30">
@@ -53,30 +104,18 @@ export function Sidebar({
       {/* Session list */}
       <ScrollArea className="flex-1">
         <div className="flex flex-col gap-0.5 p-2">
-          {sessions.map((session) => (
-            <div
-              key={session.id}
-              className={cn(
-                "group flex items-center gap-2 rounded-md px-2 py-1.5 text-sm cursor-pointer",
-                session.id === currentSessionId
-                  ? "bg-accent text-accent-foreground"
-                  : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
-              )}
-              onClick={() => onSelectSession(session.id)}
-            >
-              <MessageSquareIcon className="h-3.5 w-3.5 shrink-0" />
-              <span className="flex-1 truncate">{session.title}</span>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDeleteSession(session.id);
-                }}
-                className="hidden shrink-0 rounded p-0.5 text-muted-foreground hover:text-destructive group-hover:block"
-              >
-                <Trash2Icon className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          ))}
+          {favorites.length > 0 && (
+            <>
+              <span className="px-2 pt-1 pb-0.5 text-xs font-medium text-muted-foreground">
+                Favorites
+              </span>
+              {favorites.map(renderSession)}
+              <span className="px-2 pt-2 pb-0.5 text-xs font-medium text-muted-foreground">
+                Recent
+              </span>
+            </>
+          )}
+          {recent.map(renderSession)}
         </div>
       </ScrollArea>
 
