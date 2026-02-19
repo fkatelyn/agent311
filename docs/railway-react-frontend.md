@@ -152,7 +152,7 @@ Note: `VITE_API_URL` must come from `.env.production` (committed to the repo), n
 
 ### Step 5: Generate a Public Domain
 
-Using the Railway MCP or CLI:
+Using the Railway CLI:
 
 ```bash
 railway domain --service frontend

@@ -50,7 +50,7 @@ Railpack auto-detects Next.js from `package.json` and runs `npm install` → `np
 
 ## Railway Dashboard Setup
 
-These settings **cannot** be configured via MCP tools or CLI — they must be done in the Railway dashboard.
+These settings **cannot** be configured via the Railway CLI — they must be done in the Railway dashboard.
 
 ### Step 1: Set Root Directory
 
@@ -73,11 +73,6 @@ These settings **cannot** be configured via MCP tools or CLI — they must be do
 
 ```bash
 railway domain
-```
-
-Or via MCP:
-```
-mcp__Railway__generate-domain(workspacePath: "...", service: "<service-name>")
 ```
 
 ## Pitfalls

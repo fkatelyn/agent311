@@ -1,6 +1,6 @@
-# Railway Deployment Guide (MCP-Driven)
+# Railway Deployment Guide
 
-A comprehensive guide to deploying services on Railway using MCP (Model Context Protocol) tools from Claude Code or the Railway CLI. Covers Python/FastAPI, React/JavaScript, and Docker deployments.
+A comprehensive guide to deploying services on Railway using the Railway CLI. Covers Python/FastAPI, React/JavaScript, and Docker deployments.
 
 **Requirements:**
 - **Railway CLI**: Install via `brew install railway` or `npm install -g @railway/cli`
@@ -15,15 +15,12 @@ A comprehensive guide to deploying services on Railway using MCP (Model Context 
 - [Overview](#overview)
 - [Architecture](#architecture)
 - [Prerequisites](#prerequisites)
-- [Railway MCP Setup](#railway-mcp-setup)
-- [MCP Tool Quick Reference](#mcp-tool-quick-reference)
 - [Railway CLI Reference](#railway-cli-reference)
 - [Section A: Python/FastAPI (Railpack)](#section-a-pythonfastapi-railpack)
 - [Section B: React/Vite Frontend (Railpack)](#section-b-reactvite-frontend-railpack)
-- [Section B2: Next.js assistant-ui Frontend (Railpack)](#section-b2-nextjs-assistant-ui-frontend-railpack)
+- [Section B2: Next.js Frontend (Railpack)](#section-b2-nextjs-frontend-railpack)
 - [Section C: Docker Image Service](#section-c-docker-image-service)
 - [Multi-Service Architecture](#multi-service-architecture)
-- [MCP Workflow Diagrams](#mcp-workflow-diagrams)
 - [Common Errors and Fixes](#common-errors-and-fixes)
 - [Appendix: Railway GraphQL API Recipes](#appendix-railway-graphql-api-recipes)
 - [Appendix: Creating a Claude Code Skill](#appendix-creating-a-claude-code-skill)
@@ -32,20 +29,16 @@ A comprehensive guide to deploying services on Railway using MCP (Model Context 
 
 ## Overview
 
-This guide covers three deployment types, all driven by Railway MCP tools:
+This guide covers three deployment types, all driven by the Railway CLI:
 
 | Type | Builder | Use Case |
 |------|---------|----------|
 | **A. Python/FastAPI** | Railpack | Backend APIs with uv package manager |
 | **B. React/Vite** | Railpack | Vite-based frontends served as static files |
-| **B2. Next.js (assistant-ui)** | Railpack | Next.js apps in a monorepo subdirectory |
+| **B2. Next.js** | Railpack | Next.js apps in a monorepo subdirectory |
 | **C. Docker** | Dockerfile | Custom builds, system dependencies, multi-stage |
 
-Each section includes config files, MCP tool calls, mermaid diagrams, and battle-tested gotchas from real deployments.
-
-### What are Railway MCP Tools?
-
-Railway provides an MCP server that exposes 14 tools for managing projects, services, deployments, domains, environment variables, and logs — all callable from Claude Code without leaving the terminal.
+Each section includes config files, CLI commands, mermaid diagrams, and battle-tested gotchas from real deployments.
 
 ---
 
@@ -56,14 +49,14 @@ graph TB
     subgraph Railway Project
         BE[Backend Service<br>Python/FastAPI<br>Railpack]
         FE[Frontend Service<br>React/Vite<br>Railpack]
-        AUI[assistant-ui Service<br>Next.js<br>Railpack]
+        AUI[agentui Service<br>Next.js<br>Railpack]
         DK[Docker Service<br>Custom Image<br>Dockerfile]
     end
 
     subgraph Domains
         BED[backend.up.railway.app]
         FED[frontend.up.railway.app]
-        AUID[assistantui.up.railway.app]
+        AUID[agentui.up.railway.app]
         DKD[docker-svc.up.railway.app]
     end
 
@@ -77,7 +70,7 @@ graph TB
     DK -->|railway.internal| BE
 
     GH[GitHub Repo] -->|auto-deploy on push| Railway Project
-    MCP[Claude Code + MCP] -->|Railway MCP Tools| Railway Project
+    CLI[Railway CLI] -->|railway up| Railway Project
 ```
 
 ### Project Structure (Monorepo)
@@ -85,8 +78,12 @@ graph TB
 ```
 repo-root/
 ├── agent311/                  # Python backend package
-│   ├── __init__.py
-│   └── main.py               # FastAPI app entry point
+│   ├── agent311/
+│   │   └── main.py            # FastAPI app entry point
+│   ├── pyproject.toml
+│   ├── uv.lock
+│   ├── railpack.json
+│   └── railway.json
 ├── frontend/                  # React/Vite frontend (old)
 │   ├── src/
 │   │   ├── App.jsx
@@ -95,23 +92,16 @@ repo-root/
 │   ├── index.html
 │   ├── package.json
 │   ├── vite.config.js
-│   ├── railpack.json          # Frontend Railpack config
-│   └── .env.production        # Build-time env vars
-├── assistantui/               # Next.js assistant-ui frontend
+│   ├── railpack.json
+│   └── .env.production
+├── agentui/                   # Next.js frontend
 │   ├── app/
-│   │   ├── assistant.tsx      # Runtime config (API URL)
 │   │   ├── layout.tsx
 │   │   └── page.tsx
 │   ├── components/
 │   ├── package.json           # Must have engines.node >= 20
-│   ├── railpack.json          # assistantui Railpack config
-│   └── railway.json           # Config-as-code for this service
-├── pyproject.toml             # Must be at repo root
-├── uv.lock                    # Must be at repo root
-├── railpack.json              # Backend Railpack config
-├── railway.json               # Railway builder config
-├── .python-version            # Python version pin (3.12)
-├── start.sh                   # Local dev startup
+│   ├── railpack.json
+│   └── railway.json
 └── CLAUDE.md
 ```
 
@@ -122,89 +112,14 @@ repo-root/
 | Requirement | How to Get It | Verify |
 |-------------|--------------|--------|
 | Railway account | [railway.com](https://railway.com) | — |
-| Railway CLI | `npm install -g @railway/cli` | `railway --version` |
-| Railway auth | `railway login --browserless` | `railway whoami` |
-| Railway MCP server | Configure in `.claude/settings.local.json` | `mcp__Railway__check-railway-status` |
+| Railway CLI | `brew install railway` | `railway --version` |
+| Railway auth | `railway login` | `railway whoami` |
 | uv (Python) | `curl -LsSf https://astral.sh/uv/install.sh \| sh` | `uv --version` |
 | Node.js (Frontend) | [nodejs.org](https://nodejs.org) | `node --version` |
 
 ---
 
-## Railway MCP Setup
-
-### 1. Install Railway CLI
-
-```bash
-npm install -g @railway/cli
-```
-
-### 2. Authenticate
-
-```bash
-railway login --browserless
-```
-
-This gives you a URL to open in your browser. After authenticating, paste the token back into the terminal.
-
-For CI/CD or headless environments, set the `RAILWAY_TOKEN` environment variable:
-
-```bash
-export RAILWAY_TOKEN=your-token-here
-```
-
-### 3. Configure MCP Server
-
-Add the Railway MCP server to your Claude Code settings. In `.claude/settings.local.json`:
-
-```json
-{
-  "mcpServers": {
-    "Railway": {
-      "command": "railway",
-      "args": ["mcp"]
-    }
-  }
-}
-```
-
-### 4. Verify
-
-Run the status check MCP tool from Claude Code:
-
-```
-mcp__Railway__check-railway-status()
-```
-
-This confirms: CLI installed, user authenticated, and linked project/environment (if any).
-
----
-
-## MCP Tool Quick Reference
-
-All 14 Railway MCP tools at a glance. For full parameter details, see [MCP Tool Reference](../.claude/skills/railway-deploy/references/mcp-tool-reference.md).
-
-| Tool | Purpose | Key Params |
-|------|---------|-----------|
-| `check-railway-status` | Verify CLI + login | — |
-| `create-project-and-link` | Create new project | `projectName`, `workspacePath` |
-| `create-environment` | Create new environment | `environmentName`, `workspacePath` |
-| `deploy` | Push code to Railway | `workspacePath`, `service` |
-| `deploy-template` | Deploy a template | `searchQuery`, `workspacePath` |
-| `generate-domain` | Create public URL | `workspacePath`, `service` |
-| `get-logs` | View build/deploy logs | `workspacePath`, `logType` |
-| `link-environment` | Switch environment | `environmentName`, `workspacePath` |
-| `link-service` | Switch linked service | `workspacePath`, `serviceName` |
-| `list-deployments` | Show deployment history | `workspacePath` |
-| `list-projects` | Show all projects | — |
-| `list-services` | Show project services | `workspacePath` |
-| `list-variables` | Show env vars | `workspacePath` |
-| `set-variables` | Set env vars | `workspacePath`, `variables` |
-
----
-
 ## Railway CLI Reference
-
-While the MCP tools provide a seamless experience within Claude Code, you can also use the Railway CLI directly for all operations. This section shows CLI equivalents for every MCP tool.
 
 ### Installation
 
@@ -239,26 +154,22 @@ railway whoami
 export RAILWAY_TOKEN=your-token-here
 ```
 
-### Railway CLI Command Reference
+### Command Reference
 
-Complete mapping of MCP tools to CLI commands:
-
-| MCP Tool | Railway CLI Equivalent | Description |
-|----------|----------------------|-------------|
-| `check-railway-status` | `railway whoami` | Check CLI installation and authentication |
-| `create-project-and-link` | `railway init`<br>`railway link` | Create new project and link to directory |
-| `create-environment` | `railway environment` | Create/manage environments |
-| `deploy` | `railway up` | Deploy current directory to Railway |
-| `deploy-template` | `railway init --template <name>` | Deploy from template |
-| `generate-domain` | `railway domain` | Generate/manage public domain |
-| `get-logs` | `railway logs`<br>`railway logs --deployment <id>` | View service logs |
-| `link-environment` | `railway environment <name>` | Switch active environment |
-| `link-service` | `railway service <name>` | Link to specific service |
-| `list-deployments` | `railway status` | Show deployment status |
-| `list-projects` | `railway list` | List all projects |
-| `list-services` | `railway status` | Show services in project |
-| `list-variables` | `railway variables` | List environment variables |
-| `set-variables` | `railway variables set KEY=value` | Set environment variables |
+| Operation | Railway CLI Command | Description |
+|-----------|-------------------|-------------|
+| Check status | `railway whoami` | Check CLI installation and authentication |
+| Create project | `railway init` | Create new project and link to directory |
+| Link project | `railway link` | Link directory to existing project |
+| Deploy | `railway up` | Deploy current directory to Railway |
+| Generate domain | `railway domain` | Generate/manage public domain |
+| View logs | `railway logs` | View service logs |
+| Switch environment | `railway environment <name>` | Switch active environment |
+| Link service | `railway service <name>` | Link to specific service |
+| Show status | `railway status` | Show deployment status and services |
+| List projects | `railway list` | List all projects |
+| List variables | `railway variables` | List environment variables |
+| Set variables | `railway variables set KEY=value` | Set environment variables |
 
 ### Common CLI Workflows
 
@@ -352,56 +263,25 @@ railway status --json | jq
 railway open
 ```
 
-### CLI vs MCP: When to Use Which
-
-**Use Railway CLI when:**
-- Working outside Claude Code
-- Writing shell scripts or CI/CD pipelines
-- Need fine-grained control over flags
-- Troubleshooting authentication issues
-- Want to use `railway open` to jump to dashboard
-
-**Use Railway MCP tools when:**
-- Working within Claude Code
-- Want Claude to manage deployments automatically
-- Prefer declarative tool calls over shell commands
-- Building Claude Code skills that automate Railway tasks
-
-### Advanced CLI Usage
-
-**Link project to specific directory:**
+**Advanced usage:**
 ```bash
+# Link project to specific directory
 cd /path/to/project
 railway link
-# Or specify path:
-railway link --workdir /path/to/project
-```
 
-**Deploy from subdirectory:**
-```bash
-# Deploy frontend subfolder
+# Deploy from subdirectory
 cd frontend
 railway up
 
-# Or from root with service flag
-railway up --service frontend
-```
-
-**View build logs:**
-```bash
-railway logs --deployment <deployment-id>
-```
-
-**Run commands in Railway environment:**
-```bash
-# Run command with Railway env vars loaded
+# Run commands with Railway env vars loaded
 railway run npm start
 railway run python manage.py migrate
-```
 
-**Shell into running service:**
-```bash
+# Shell into running service
 railway shell
+
+# View build logs for a specific deployment
+railway logs --deployment <deployment-id>
 ```
 
 ---
@@ -413,12 +293,12 @@ Deploy a FastAPI backend using uv as the package manager and Railpack as the bui
 ### Prerequisites
 
 - `uv` installed locally (`uv --version`)
-- `pyproject.toml` + `uv.lock` at repo root
-- `.python-version` at repo root
+- `pyproject.toml` + `uv.lock` at service root
+- `.python-version` at service root
 
 ### Config Files
 
-#### `pyproject.toml` (repo root)
+#### `agent311/pyproject.toml`
 
 ```toml
 [project]
@@ -428,7 +308,7 @@ description = ""
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    "claude-code-sdk",
+    "claude-agent-sdk",
     "fastapi",
     "uvicorn",
 ]
@@ -440,7 +320,7 @@ build-backend = "hatchling.build"
 
 > **Gotcha:** The build backend is `hatchling.build`, NOT `hatchling.backends` (which doesn't exist and will crash the build).
 
-#### `railpack.json` (repo root)
+#### `agent311/railpack.json`
 
 ```json
 {
@@ -455,7 +335,7 @@ build-backend = "hatchling.build"
 
 > **Note:** Railpack auto-detects uv from `pyproject.toml` + `uv.lock` and installs the latest uv via mise. No version pin needed.
 
-#### `railway.json` (repo root)
+#### `agent311/railway.json`
 
 ```json
 {
@@ -466,7 +346,7 @@ build-backend = "hatchling.build"
 }
 ```
 
-#### `.python-version` (repo root)
+#### `agent311/.python-version`
 
 ```
 3.12
@@ -481,88 +361,56 @@ uv lock
 
 Commit this file. Railpack detects uv by the presence of `pyproject.toml` + `uv.lock` at the service root.
 
-### MCP Deployment Flow
+### Deployment Flow
 
 ```mermaid
 sequenceDiagram
-    participant C as Claude Code
-    participant R as Railway MCP
+    participant D as Developer
+    participant CLI as Railway CLI
+    participant R as Railway
 
-    C->>R: check-railway-status()
-    R-->>C: CLI v4.x, logged in
+    D->>CLI: railway whoami
+    CLI-->>D: Logged in as user@email.com
 
-    C->>R: list-projects()
-    R-->>C: [powerful-dream, ...]
+    D->>CLI: railway link
+    CLI-->>D: Linked to project
 
-    C->>R: link-service(serviceName: "agent311")
-    R-->>C: Linked to agent311
+    D->>CLI: railway service agent311
+    CLI-->>D: Linked to agent311
 
-    C->>R: link-environment(environmentName: "production")
-    R-->>C: Linked to production
+    D->>CLI: railway up
+    CLI-->>D: Deployment started
 
-    C->>R: deploy(service: "agent311")
-    R-->>C: Deployment started
+    D->>CLI: railway status
+    CLI-->>D: SUCCESS
 
-    C->>R: list-deployments(json: true, limit: 1)
-    R-->>C: {status: "SUCCESS"}
-
-    C->>R: generate-domain(service: "agent311")
-    R-->>C: https://&lt;agent311-service&gt;.up.railway.app
+    D->>CLI: railway domain
+    CLI-->>D: https://agent311-production.up.railway.app
 ```
 
-### Step-by-Step MCP Calls
+### Step-by-Step
 
-**1. Verify status:**
-```
-mcp__Railway__check-railway-status()
-```
+```bash
+# 1. Verify status
+railway whoami
 
-**2. Link to project and service:**
-```
-mcp__Railway__link-service(
-  workspacePath: "/path/to/repo",
-  serviceName: "agent311"
-)
-mcp__Railway__link-environment(
-  workspacePath: "/path/to/repo",
-  environmentName: "production"
-)
-```
+# 2. Link to project and service
+cd agent311
+railway link
+railway service agent311
+railway environment production
 
-**3. Deploy:**
-```
-mcp__Railway__deploy(
-  workspacePath: "/path/to/repo",
-  service: "agent311"
-)
-```
+# 3. Deploy
+railway up
 
-**4. Generate public domain:**
-```
-mcp__Railway__generate-domain(
-  workspacePath: "/path/to/repo",
-  service: "agent311"
-)
-```
+# 4. Generate public domain
+railway domain
 
-**5. Verify deployment:**
-```
-mcp__Railway__list-deployments(
-  workspacePath: "/path/to/repo",
-  service: "agent311",
-  json: true,
-  limit: 3
-)
-```
+# 5. Verify deployment
+railway status
 
-**6. Check logs if needed:**
-```
-mcp__Railway__get-logs(
-  workspacePath: "/path/to/repo",
-  logType: "build",
-  service: "agent311",
-  lines: 50
-)
+# 6. Check logs if needed
+railway logs --lines 50
 ```
 
 ### Verification
@@ -671,123 +519,120 @@ app.add_middleware(
 
 ### Root Directory
 
-The frontend lives in `frontend/`, not the repo root. You must set the root directory via the Railway GraphQL API (see [Appendix](#appendix-railway-graphql-api-recipes)):
+The frontend lives in `frontend/`, not the repo root. Set the root directory in the Railway dashboard (Settings > Root Directory > `frontend`) or via the GraphQL API (see [Appendix](#set-root-directory)).
+
+### Step-by-Step
 
 ```bash
-curl -s -X POST https://backboard.railway.com/graphql/v2 \
-  -H "Authorization: Bearer $RAILWAY_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "query": "mutation { serviceInstanceUpdate(serviceId: \"<SERVICE_ID>\", environmentId: \"<ENV_ID>\", input: { rootDirectory: \"frontend\" }) }"
-  }'
-```
+# 1. Link to frontend service
+cd frontend
+railway link
+railway service frontend
+railway environment production
 
-### MCP Deployment Flow
+# 2. Set root directory in Railway dashboard, then:
 
-```mermaid
-sequenceDiagram
-    participant C as Claude Code
-    participant R as Railway MCP
+# 3. Deploy
+railway up
 
-    C->>R: check-railway-status()
-    R-->>C: CLI v4.x, logged in
+# 4. Generate domain
+railway domain
 
-    C->>R: link-service(serviceName: "frontend")
-    R-->>C: Linked to frontend
-
-    C->>R: link-environment(environmentName: "production")
-    R-->>C: Linked to production
-
-    Note over C: Set root directory via GraphQL API
-
-    C->>R: deploy(service: "frontend")
-    R-->>C: Deployment started
-
-    C->>R: generate-domain(service: "frontend")
-    R-->>C: https://frontend-production-xxxx.up.railway.app
-
-    C->>R: list-deployments(json: true, limit: 1)
-    R-->>C: {status: "SUCCESS"}
-```
-
-### Step-by-Step MCP Calls
-
-**1. Link to frontend service:**
-```
-mcp__Railway__link-service(
-  workspacePath: "/path/to/repo",
-  serviceName: "frontend"
-)
-```
-
-**2. Set root directory via GraphQL** (see [Appendix](#set-root-directory))
-
-**3. Deploy:**
-```
-mcp__Railway__deploy(
-  workspacePath: "/path/to/repo",
-  service: "frontend"
-)
-```
-
-**4. Generate domain:**
-```
-mcp__Railway__generate-domain(
-  workspacePath: "/path/to/repo",
-  service: "frontend"
-)
-```
-
-**5. Verify:**
-```
-mcp__Railway__list-deployments(
-  workspacePath: "/path/to/repo",
-  service: "frontend",
-  json: true,
-  limit: 3
-)
-```
-
-### Verification
-
-```bash
+# 5. Verify
+railway status
 curl https://frontend-production-xxxx.up.railway.app/
-# Returns HTML of the React app
 ```
 
 ---
 
-## Section B2: Next.js assistant-ui Frontend (Railpack)
+## Section B2: Next.js Frontend (Railpack)
 
-Deploy a Next.js frontend (using [assistant-ui](https://github.com/assistant-ui/assistant-ui)) as a third Railway service in a monorepo. This section documents the real pitfalls encountered deploying `assistantui/` alongside the existing backend and Vite frontend.
+Deploy a Next.js frontend (`agentui/`) as a separate Railway service in a monorepo.
 
 For the full step-by-step walkthrough and all gotchas, see the dedicated guide: **[Deploying Next.js on Railway](railway-nextjs-setup.md)**.
 
 ### Key Differences from Vite Frontend
 
-| Aspect | Vite Frontend (Section B) | Next.js assistant-ui |
-|--------|--------------------------|---------------------|
+| Aspect | Vite Frontend (Section B) | Next.js (agentui) |
+|--------|--------------------------|-------------------|
 | Framework | Vite + React | Next.js 16 |
-| Directory | `frontend/` | `assistantui/` |
+| Directory | `frontend/` | `agentui/` |
 | Node.js version | 18+ works | **20+ required** |
 | Serving | `npx serve dist` (static) | `next start` (SSR) |
 | API URL | Build-time `VITE_*` env var | Runtime `NEXT_PUBLIC_*` env var |
-| Config-as-code | Not used | `assistantui/railway.json` |
+| Config-as-code | Not used | `agentui/railway.json` |
+
+### Config Files
+
+#### `agentui/railpack.json`
+
+```json
+{
+  "$schema": "https://schema.railpack.com",
+  "deploy": {
+    "startCommand": "npm run start"
+  }
+}
+```
+
+#### `agentui/railway.json`
+
+```json
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "build": {
+    "builder": "RAILPACK"
+  }
+}
+```
+
+#### `agentui/package.json` (key fields)
+
+```json
+{
+  "engines": {
+    "node": ">=20.9.0"
+  }
+}
+```
+
+### Step-by-Step
+
+```bash
+# 1. Link to agentui service
+cd agentui
+railway link
+railway service agentui
+railway environment production
+
+# 2. Set variables
+railway variables set NEXT_PUBLIC_API_URL=https://your-backend.up.railway.app
+
+# 3. Set root directory in Railway dashboard to /agentui, then:
+
+# 4. Deploy
+railway up
+
+# 5. Generate domain
+railway domain
+
+# 6. Verify
+railway status
+```
 
 ### Critical Gotchas (Summary)
 
-1. **Root directory** must be set in Railway dashboard (Settings > Root Directory > `/assistantui`) — cannot be set via MCP tools
-2. **Config-as-code path** must be set in Railway dashboard (Settings > Config-as-code > `assistantui/railway.json`) — then Apply changes
+1. **Root directory** must be set in Railway dashboard (Settings > Root Directory > `/agentui`) — cannot be set via CLI
+2. **Config-as-code path** must be set in Railway dashboard (Settings > Config-as-code > `agentui/railway.json`) — then Apply changes
 3. **Dashboard changes require Apply** — Railway shows "N changes" badge but doesn't auto-apply
 4. **`packageManager` field in package.json** may force a different package manager — remove it if using npm
 5. **Node.js version** — add `"engines": {"node": ">=20.9.0"}` to `package.json` so Railpack installs Node.js 20+
-6. **Backend must handle AI SDK v6 message format** — assistant-ui sends `parts` array, not `content` string
 
 ---
 
 ## Section C: Docker Image Service
 
-Deploy a service using a custom Dockerfile instead of Nixpacks.
+Deploy a service using a custom Dockerfile instead of Railpack.
 
 ### When to Use Docker vs Railpack
 
@@ -854,81 +699,27 @@ CMD ["serve", "dist", "-l", "3000"]
 }
 ```
 
-You can also set the builder via GraphQL API (see [Appendix](#set-builder)).
+### Step-by-Step
 
-### MCP Deployment Flow
-
-```mermaid
-sequenceDiagram
-    participant C as Claude Code
-    participant R as Railway MCP
-
-    C->>R: check-railway-status()
-    R-->>C: CLI v4.x, logged in
-
-    C->>R: list-services()
-    R-->>C: [agent311, frontend, docker-svc]
-
-    C->>R: link-service(serviceName: "docker-svc")
-    R-->>C: Linked
-
-    Note over C: Set builder to DOCKERFILE via GraphQL API
-
-    C->>R: set-variables(variables: ["PORT=8000"])
-    R-->>C: Variable set
-
-    C->>R: deploy(service: "docker-svc")
-    R-->>C: Deployment started
-
-    C->>R: get-logs(logType: "build", lines: 50)
-    R-->>C: Build logs...
-
-    C->>R: generate-domain(service: "docker-svc")
-    R-->>C: https://docker-svc-production.up.railway.app
-
-    C->>R: list-deployments(json: true, limit: 1)
-    R-->>C: {status: "SUCCESS"}
-```
-
-### Step-by-Step MCP Calls
-
-**1. Link to service:**
-```
-mcp__Railway__link-service(
-  workspacePath: "/path/to/repo",
-  serviceName: "docker-svc"
-)
-```
-
-**2. Set builder via GraphQL** (see [Appendix](#set-builder))
-
-**3. Set variables:**
-```
-mcp__Railway__set-variables(
-  workspacePath: "/path/to/repo",
-  variables: ["PORT=8000"],
-  service: "docker-svc"
-)
-```
-
-**4. Deploy:**
-```
-mcp__Railway__deploy(
-  workspacePath: "/path/to/repo",
-  service: "docker-svc"
-)
-```
-
-**5. Generate domain:**
-```
-mcp__Railway__generate-domain(
-  workspacePath: "/path/to/repo",
-  service: "docker-svc"
-)
-```
-
-**6. Verify:**
 ```bash
+# 1. Link to service
+railway link
+railway service docker-svc
+railway environment production
+
+# 2. Set builder via railway.json (above) or GraphQL API (see Appendix)
+
+# 3. Set variables
+railway variables set PORT=8000
+
+# 4. Deploy
+railway up
+
+# 5. Generate domain
+railway domain
+
+# 6. Verify
+railway status
 curl https://docker-svc-production.up.railway.app/
 ```
 
@@ -954,42 +745,45 @@ dist
 
 ```
 repo-root/
-├── agent311/         ← Backend service (root dir: /)
-│   ├── __init__.py
-│   └── main.py
+├── agent311/         ← Backend service (root dir: /agent311)
+│   ├── agent311/
+│   │   └── main.py
+│   ├── pyproject.toml
+│   ├── uv.lock
+│   └── railpack.json
 ├── frontend/         ← Vite frontend service (root dir: /frontend)
 │   ├── src/
 │   ├── package.json
 │   └── railpack.json
-├── assistantui/      ← Next.js frontend service (root dir: /assistantui)
+├── agentui/          ← Next.js frontend service (root dir: /agentui)
 │   ├── app/
 │   ├── package.json
 │   ├── railpack.json
 │   └── railway.json  ← Config-as-code for this service
-├── pyproject.toml    ← Backend config (at repo root)
-├── railpack.json     ← Backend Railpack config
-└── railway.json      ← Backend Railway config
 ```
 
-Each Railway service in the same project can have a different **root directory**:
-- Backend: `/` (repo root) — reads `pyproject.toml`, `railpack.json`, `railway.json`
+Each Railway service in the same project can have a different **root directory**, set in the Railway dashboard:
+- Backend: `/agent311` — reads `agent311/pyproject.toml`, `agent311/railpack.json`, `agent311/railway.json`
 - Frontend: `/frontend` — reads `frontend/package.json`, `frontend/railpack.json`
-- assistant-ui: `/assistantui` — reads `assistantui/package.json`, `assistantui/railpack.json`, `assistantui/railway.json`
+- agentui: `/agentui` — reads `agentui/package.json`, `agentui/railpack.json`, `agentui/railway.json`
 
-### Service Linking and Root Directories
+### Deploying Multiple Services
 
-When you have multiple services, you need to:
-1. Link to the correct service before deploying
-2. Set the correct root directory for each service
-
-```
+```bash
 # Deploy backend
-mcp__Railway__link-service(workspacePath: "...", serviceName: "agent311")
-mcp__Railway__deploy(workspacePath: "...", service: "agent311")
+cd agent311
+railway link && railway service agent311
+railway up
 
 # Deploy frontend
-mcp__Railway__link-service(workspacePath: "...", serviceName: "frontend")
-mcp__Railway__deploy(workspacePath: "...", service: "frontend")
+cd ../frontend
+railway link && railway service frontend
+railway up
+
+# Deploy agentui
+cd ../agentui
+railway link && railway service agentui
+railway up
 ```
 
 ### Internal Networking
@@ -1005,69 +799,6 @@ This is faster and free (no egress charges) compared to using public domains.
 
 ---
 
-## MCP Workflow Diagrams
-
-### New Project Setup
-
-```mermaid
-flowchart TD
-    A[check-railway-status] --> B{Logged in?}
-    B -->|No| C[railway login --browserless]
-    C --> A
-    B -->|Yes| D[create-project-and-link]
-    D --> E[link-environment: production]
-    E --> F[set-variables]
-    F --> G[deploy]
-    G --> H[generate-domain]
-    H --> I[list-deployments: verify]
-    I --> J{Status?}
-    J -->|SUCCESS| K[Done - curl domain URL]
-    J -->|FAILED| L[get-logs: build]
-    L --> M[Fix issues]
-    M --> G
-```
-
-### Add Service to Existing Project
-
-```mermaid
-flowchart TD
-    A[list-services] --> B{Service exists?}
-    B -->|Yes| C[link-service]
-    B -->|No| D[Create via Railway dashboard]
-    D --> C
-    C --> E[link-environment]
-    E --> F[Set root directory via GraphQL]
-    F --> G[set-variables]
-    G --> H[deploy]
-    H --> I[generate-domain]
-    I --> J[list-deployments: verify]
-```
-
-### Debug Failed Deployment
-
-```mermaid
-flowchart TD
-    A[list-deployments: check status] --> B{Status?}
-    B -->|BUILDING| C[Wait or check build logs]
-    B -->|FAILED| D[get-logs: build]
-    B -->|CRASHED| E[get-logs: deploy]
-    B -->|SUCCESS but unreachable| F[generate-domain]
-
-    D --> G{Error type?}
-    G -->|uv not found| H[Check pyproject.toml location]
-    G -->|module not found| I[Check dependencies]
-    G -->|build timeout| J[Check plan limits]
-
-    E --> K{Error type?}
-    K -->|import error| L[Check __init__.py and module path]
-    K -->|port in use| M[Use PORT env var]
-    K -->|uvicorn not found| N[Use python -m uvicorn]
-
-    F --> O[list-variables: check env vars]
-```
-
----
-
 ## Common Errors and Fixes
 
 ### Python/FastAPI
@@ -1077,7 +808,7 @@ flowchart TD
 | `uv: command not found` | `pyproject.toml`/`uv.lock` not at service root | Move files to service root |
 | `No module named 'hatchling.backends'` | Wrong `build-backend` value | Use `build-backend = "hatchling.build"` |
 | `uvicorn: command not found` | venv bin not on PATH | Use `python -m uvicorn` |
-| App not reachable | No public domain | Run `generate-domain` |
+| App not reachable | No public domain | Run `railway domain` |
 
 ### React/Vite
 
@@ -1085,17 +816,16 @@ flowchart TD
 |-------|-------|-----|
 | "Failed to connect to backend" | `VITE_API_URL` not set at build time | Add `.env.production` with backend URL |
 | CORS error in browser | Backend missing CORS middleware | Add `CORSMiddleware` to FastAPI |
-| Frontend serves Python app | Root directory not set | Set `rootDirectory: "frontend"` via GraphQL |
+| Frontend serves Python app | Root directory not set | Set `rootDirectory: "frontend"` in Railway dashboard |
 | `npx serve` not found | Node.js not detected | Ensure `package.json` in service root dir |
 
-### Next.js / assistant-ui
+### Next.js / agentui
 
 | Error | Cause | Fix |
 |-------|-------|-----|
 | `Node.js version ">=20.9.0" is required` | Railpack picks up `engines.node` from `package.json` | Add `"engines": {"node": ">=20.9.0"}` to `package.json` |
 | `pnpm i --frozen-lockfile` fails, no lockfile | `packageManager` field in `package.json` forces pnpm | Remove `"packageManager": "pnpm@..."` from `package.json` |
-| Config-as-code not picked up | Path not set or changes not applied | Set Config-as-code to `assistantui/railway.json` in dashboard, then Apply |
-| Agent loses conversation memory | Backend reads `content` but AI SDK v6 sends `parts` | Handle both `msg.content` and `msg.parts` in backend |
+| Config-as-code not picked up | Path not set or changes not applied | Set Config-as-code to `agentui/railway.json` in dashboard, then Apply |
 | Root directory ignored | Dashboard changes pending | Click Apply after changing settings (check "N changes" badge) |
 
 ### Docker
@@ -1107,22 +837,11 @@ flowchart TD
 | Port mismatch | `EXPOSE` doesn't match app port | Align `EXPOSE`, app port, and `PORT` env var |
 | Builder not set | Railway defaults to Railpack | Set `"builder": "DOCKERFILE"` in `railway.json` |
 
-### MCP Tools
-
-| Error | Cause | Fix |
-|-------|-------|-----|
-| MCP server not responding | Not configured | Add Railway MCP to `.claude/settings.local.json` |
-| "Not logged in" | CLI not authenticated | `railway login --browserless` |
-| "No linked project" | Workspace not linked | `create-project-and-link` or `link-service` |
-| Vars set but old code running | Deploy not triggered | Run `deploy` or push to GitHub |
-
-For the full troubleshooting reference, see [Troubleshooting Guide](../.claude/skills/railway-deploy/references/troubleshooting.md).
-
 ---
 
 ## Appendix: Railway GraphQL API Recipes
 
-Some Railway operations (root directory, builder type) aren't exposed via MCP tools and require the GraphQL API.
+Some Railway operations (root directory, builder type) aren't exposed via the CLI and require the GraphQL API.
 
 ### Prerequisites
 
@@ -1194,7 +913,6 @@ Skills are markdown files with YAML frontmatter that teach Claude Code how to ha
 .claude/skills/<skill-name>/
 ├── SKILL.md                      # Main skill file (YAML frontmatter + instructions)
 └── references/                   # Supporting reference docs
-    ├── mcp-tool-reference.md
     └── troubleshooting.md
 ```
 
@@ -1230,7 +948,7 @@ This project's skill lives at `.claude/skills/railway-deploy/SKILL.md`. It:
 1. **Detects deployment type** (Python, React, Docker) from the user's request
 2. **Runs pre-flight checks** (CLI status, project/service linking)
 3. **Verifies config files** exist with correct content
-4. **Executes MCP tool calls** in the correct order
+4. **Executes CLI commands** in the correct order
 5. **Provides gotcha checklists** to catch common mistakes
 6. **Debugs failures** using build/deploy logs
 
@@ -1239,12 +957,12 @@ This project's skill lives at `.claude/skills/railway-deploy/SKILL.md`. It:
 User: "Deploy the backend to Railway"
 
 The skill activates and Claude Code:
-1. Checks Railway CLI status
+1. Checks Railway CLI status (`railway whoami`)
 2. Links to the correct project/service/environment
 3. Verifies `pyproject.toml`, `uv.lock`, `railpack.json`, `railway.json` exist
-4. Deploys via `mcp__Railway__deploy`
-6. Generates a domain
-7. Verifies the deployment succeeded
+4. Deploys via `railway up`
+5. Generates a domain (`railway domain`)
+6. Verifies the deployment succeeded (`railway status`)
 
 ---
 
@@ -1253,7 +971,7 @@ The skill activates and Claude Code:
 ### Backend
 
 ```bash
-# From repo root
+cd agent311
 uv run uvicorn agent311.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
@@ -1267,38 +985,19 @@ npm run dev
 
 The Vite dev server proxies to `http://localhost:8000` by default (via the fallback in `App.jsx`).
 
-### assistant-ui Frontend
+### agentui Frontend
 
 ```bash
-cd assistantui
+cd agentui
 npm install
 npm run dev
 ```
 
 The Next.js dev server runs on `http://localhost:3000` and connects to the backend at `NEXT_PUBLIC_API_URL` (default: `http://localhost:8000`).
 
-### All Three Together
-
-Run backend and both frontends in separate terminals:
-
-```bash
-# Terminal 1 - Backend
-uv run uvicorn agent311.main:app --host 0.0.0.0 --port 8000 --reload
-
-# Terminal 2 - Vite Frontend (port 5173)
-cd frontend && npm run dev
-
-# Terminal 3 - assistant-ui Frontend (port 3000)
-cd assistantui && npm run dev
-```
-
 ---
 
 ## See Also
 
-- [FastAPI Setup Guide](railway-fastapi-setup.md) — Original detailed FastAPI deployment walkthrough
-- [React Frontend Guide](railway-react-frontend.md) — Original detailed React/Vite frontend deployment walkthrough
 - [Next.js Guide](railway-nextjs-setup.md) — Deploying Next.js in a monorepo subdirectory (all pitfalls documented)
-- [MCP Tool Reference](../.claude/skills/railway-deploy/references/mcp-tool-reference.md) — Full parameter docs for all 14 tools
-- [Troubleshooting](../.claude/skills/railway-deploy/references/troubleshooting.md) — Consolidated error table
 - [Railway Deploy Skill](../.claude/skills/railway-deploy/SKILL.md) — Claude Code automation skill
