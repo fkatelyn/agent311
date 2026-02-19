@@ -99,7 +99,7 @@ export function Sidebar({
   }
 
   return (
-    <div className="flex h-full w-64 flex-col border-r bg-muted/30">
+    <div className="flex h-full w-64 min-w-0 flex-col border-r bg-muted/30 overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between border-b px-3 py-3">
         <span className="text-sm font-semibold">Agent Austin</span>
