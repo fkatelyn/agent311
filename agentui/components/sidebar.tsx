@@ -59,7 +59,7 @@ export function Sidebar({
       <div
         key={session.id}
         className={cn(
-          "group flex min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-sm cursor-pointer",
+          "group flex w-full overflow-hidden items-center gap-2 rounded-md px-2 py-1.5 text-sm cursor-pointer",
           session.id === currentSessionId
             ? "bg-accent text-accent-foreground"
             : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
