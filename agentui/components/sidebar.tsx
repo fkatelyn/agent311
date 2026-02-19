@@ -59,7 +59,7 @@ export function Sidebar({
       <div
         key={session.id}
         className={cn(
-          "group flex items-center gap-2 rounded-md px-2 py-1.5 text-sm cursor-pointer",
+          "group flex min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-sm cursor-pointer",
           session.id === currentSessionId
             ? "bg-accent text-accent-foreground"
             : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
@@ -67,7 +67,7 @@ export function Sidebar({
         onClick={() => onSelectSession(session.id)}
       >
         <MessageSquareIcon className="h-3.5 w-3.5 shrink-0" />
-        <span className="flex-1 truncate">{session.title}</span>
+        <span className="min-w-0 flex-1 truncate">{session.title}</span>
         <button
           onClick={(e) => {
             e.stopPropagation();
