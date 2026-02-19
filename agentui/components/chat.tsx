@@ -352,6 +352,15 @@ export function Chat() {
           )
         );
 
+        // If code blocks were appended, persist the updated content to DB
+        if (finalText !== fullText) {
+          authFetch(`${API_URL}/api/messages/${assistantId}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ content: finalText }),
+          }).catch(() => {});
+        }
+
         // If save_report was used, refresh reports and switch sidebar to files
         if (hasSaveReportTool(fullText)) {
           await refreshReports();

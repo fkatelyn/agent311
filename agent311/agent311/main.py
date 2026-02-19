@@ -102,7 +102,7 @@ VIEWABLE_EXTENSIONS = {
     ".png": "png",
     ".csv": "csv",
 }
-VIEWABLE_ROOTS = (Path("/tmp").resolve(),)
+VIEWABLE_ROOTS = (Path("/tmp").resolve(), Path(_volume_mount).resolve())
 MAX_VIEWABLE_BYTES = 200_000
 
 
@@ -465,6 +465,23 @@ async def update_session(
     if body.is_favorite is not None:
         session.is_favorite = body.is_favorite
     session.updated_at = datetime.now(timezone.utc)
+    await db.commit()
+    return {"ok": True}
+
+
+@app.patch("/api/messages/{message_id}")
+async def update_message(
+    message_id: str,
+    body: dict,
+    user: str = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(select(Message).where(Message.id == message_id))
+    message = result.scalar_one_or_none()
+    if not message:
+        raise HTTPException(status_code=404, detail="Message not found")
+    if "content" in body:
+        message.content = body["content"]
     await db.commit()
     return {"ok": True}
 
