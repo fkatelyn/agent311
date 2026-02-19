@@ -1,4 +1,4 @@
-# agent311
+# Agent Austin
 
 An AI agent for exploring Austin 311 service request data. Ask questions in plain English, get charts, summaries, and insights about city services in Austin.
 

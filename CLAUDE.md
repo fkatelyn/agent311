@@ -9,9 +9,8 @@ agent311 is an Austin 311 Data Science Agent — a full-stack application with a
 ## Tech Stack
 
 - **Backend:** FastAPI + Claude Agent SDK (`claude-agent-sdk`)
-- **Frontend:** Next.js 16 + AI Elements + Streamdown (custom SSE streaming)
-- **Database:** PostgreSQL (sessions + messages, via SQLAlchemy async ORM + asyncpg)
-- **Auth:** JWT (HS256, 7-day expiry, single hardcoded user)
+- **Frontend:** shadcn + AI Elements
+- **Database:** PostgreSQL
 - **Package Manager:** uv (Python), npm (JavaScript)
 - **Deployment:** Railway (Nixpacks builder)
 
@@ -112,13 +111,8 @@ npm run start
 This project uses a `~/.env` file (not checked into git) to store local credentials:
 
 **`~/.env` file contains:**
-- `RAILWAY_TOKEN` - For Railway CLI deployments
-  - Get from: `railway login --browserless` or https://railway.app/account/tokens
-  - **Warning:** If `RAILWAY_TOKEN` is set as an env var, it overrides the CLI session token. If the token is expired, Railway CLI/MCP will fail even if `railway login` works. Fix: `unset RAILWAY_TOKEN`
 - `ANTHROPIC_API_KEY` - For Claude Agent SDK integration
   - Get from: https://console.anthropic.com/settings/keys
-- `GITHUB_TOKEN` - For GitHub API access (optional)
-  - Get from: https://github.com/settings/tokens
 
 **Backend env vars (set in Railway dashboard):**
 - `DATABASE_URL` — PostgreSQL connection string (provided automatically by Railway Postgres plugin)
@@ -128,7 +122,7 @@ This project uses a `~/.env` file (not checked into git) to store local credenti
 **Frontend env var:**
 - `NEXT_PUBLIC_API_URL` — Backend API URL (e.g., `https://agent311-production.up.railway.app`)
 
-**Railway MCP Note:** The Railway MCP server may need `RAILWAY_TOKEN` to authenticate. If MCP tools return "Invalid or expired token", check `~/.env` for the current token value, or run `unset RAILWAY_TOKEN` to fall back to the CLI session token from `railway login`.
+**Railway CLI Note:** Use the Railway CLI (installed via `brew install railway`) for deployments. Authenticate with `railway login`.
 
 The `~/.env` file should never be committed to git.
 
