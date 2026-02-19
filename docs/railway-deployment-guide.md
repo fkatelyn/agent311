@@ -761,7 +761,7 @@ curl https://frontend-production-xxxx.up.railway.app/
 
 Deploy a Next.js frontend (using [assistant-ui](https://github.com/assistant-ui/assistant-ui)) as a third Railway service in a monorepo. This section documents the real pitfalls encountered deploying `assistantui/` alongside the existing backend and Vite frontend.
 
-For the full step-by-step walkthrough and all gotchas, see the dedicated guide: **[Deploying Next.js on Railway](railway-nextjs-assistantui.md)**.
+For the full step-by-step walkthrough and all gotchas, see the dedicated guide: **[Deploying Next.js on Railway](railway-nextjs-setup.md)**.
 
 ### Key Differences from Vite Frontend
 
@@ -1298,7 +1298,7 @@ cd assistantui && npm run dev
 
 - [FastAPI Setup Guide](railway-fastapi-setup.md) — Original detailed FastAPI deployment walkthrough
 - [React Frontend Guide](railway-react-frontend.md) — Original detailed React/Vite frontend deployment walkthrough
-- [Next.js Guide](railway-nextjs-assistantui.md) — Deploying Next.js in a monorepo subdirectory (all pitfalls documented)
+- [Next.js Guide](railway-nextjs-setup.md) — Deploying Next.js in a monorepo subdirectory (all pitfalls documented)
 - [MCP Tool Reference](../.claude/skills/railway-deploy/references/mcp-tool-reference.md) — Full parameter docs for all 14 tools
 - [Troubleshooting](../.claude/skills/railway-deploy/references/troubleshooting.md) — Consolidated error table
 - [Railway Deploy Skill](../.claude/skills/railway-deploy/SKILL.md) — Claude Code automation skill
