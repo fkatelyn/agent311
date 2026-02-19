@@ -2,7 +2,7 @@
 
 The `agentui/` directory contains a Next.js 16 frontend inspired by the Claude.ai chat interface. It uses [AI Elements](https://elements.ai-sdk.dev/) for core UI primitives and custom components for artifact previewing, tool call rendering, and session management.
 
-Live URL: `https://agentui-production.up.railway.app`
+Live URL: see `railway domain` in the `agentui/` service directory
 
 ## Layout
 
@@ -30,7 +30,7 @@ Live URL: `https://agentui-production.up.railway.app`
 - **Markdown:** Streamdown (via AI Elements `MessageResponse`)
 - **Chat persistence:** PostgreSQL (via backend API)
 - **Backend communication:** Custom SSE fetch (not AI SDK `useChat`)
-- **Deployment:** Railway (Nixpacks, Node.js provider)
+- **Deployment:** Railway (Railpack)
 
 ## AI Elements Components
 
@@ -196,11 +196,11 @@ export const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000
 Railway service `agentui` in project `powerful-dream`:
 
 - **Root directory:** `/agentui` (set via Railway dashboard)
-- **Builder:** Nixpacks with `providers = ["node"]`
-- **Environment variable:** `NEXT_PUBLIC_API_URL=https://agent311-production.up.railway.app`
+- **Builder:** Railpack (auto-detects Next.js from `package.json`)
+- **Environment variable:** `NEXT_PUBLIC_API_URL` — set in Railway dashboard (get URL via `railway domain` in the backend service dir)
 - **Node.js:** Requires 20+ (`"engines": {"node": ">=20.9.0"}` in package.json)
 
-Config files: `agentui/nixpacks.toml`, `agentui/railway.json`
+Config files: `agentui/railpack.json`, `agentui/railway.json`
 
 ## File Map
 
@@ -238,7 +238,7 @@ agentui/
 │   ├── auth.ts                 # JWT login, token storage, authFetch wrapper
 │   ├── types.ts                # ChatMessage type
 │   └── utils.ts                # cn() utility
-├── nixpacks.toml               # Railway deployment config
-├── railway.json                # Nixpacks builder config
+├── railpack.json               # Railway deployment config
+├── railway.json                # Railpack builder config
 └── package.json                # engines: node >=20.9.0
 ```

@@ -304,30 +304,22 @@ Railway containers run as root. The Claude Code CLI refuses `--dangerously-skip-
 
 ### Node.js is required
 
-The Agent SDK spawns the Claude Code CLI as a subprocess, which is a Node.js binary. You must include Node.js in your nixpacks setup:
+The Agent SDK spawns the Claude Code CLI as a subprocess, which is a Node.js binary. In Railpack, add Node.js via the `packages` field and install the CLI in a build step:
 
-```toml
-# nixpacks.toml
-[phases.setup]
-nixPkgs = ["python312", "gcc", "nodejs-18_x"]
-
-[phases.cli]
-dependsOn = ["install"]
-cmds = ["npm install -g @anthropic-ai/claude-code"]
-```
-
-### `nixPkgsAppend` does not exist
-
-There is no `nixPkgsAppend` key in Nixpacks. If you use it, it's silently ignored and your packages won't be installed. Always use `nixPkgs` with all required packages listed explicitly:
-
-```toml
-# Wrong - silently ignored
-[phases.setup]
-nixPkgsAppend = ["nodejs-18_x"]
-
-# Correct - list all packages
-[phases.setup]
-nixPkgs = ["python312", "gcc", "nodejs-18_x"]
+```json
+// railpack.json
+{
+  "$schema": "https://schema.railpack.com",
+  "packages": {
+    "node": "18"
+  },
+  "steps": {
+    "install-cli": {
+      "inputs": [{ "step": "install" }],
+      "commands": ["npm install -g @anthropic-ai/claude-code"]
+    }
+  }
+}
 ```
 
 ### `StreamEvent` is not exported
@@ -343,21 +335,6 @@ from claude_agent_sdk import AssistantMessage, TextBlock
 ```
 
 Responses come as complete `AssistantMessage` blocks rather than token-by-token deltas.
-
-### Don't override the install phase
-
-Overriding `[phases.install]` in nixpacks.toml breaks Nixpacks' automatic uv detection and installation. Use a separate custom phase instead:
-
-```toml
-# Wrong - breaks uv auto-install
-[phases.install]
-cmds = ["npm install -g @anthropic-ai/claude-code"]
-
-# Correct - separate phase
-[phases.cli]
-dependsOn = ["install"]
-cmds = ["npm install -g @anthropic-ai/claude-code"]
-```
 
 ### ANTHROPIC_API_KEY must be set
 

@@ -12,12 +12,12 @@ agent311 is an Austin 311 Data Science Agent — a full-stack application with a
 - **Frontend:** shadcn + AI Elements
 - **Database:** PostgreSQL
 - **Package Manager:** uv (Python), npm (JavaScript)
-- **Deployment:** Railway (Nixpacks builder)
+- **Deployment:** Railway (Railpack builder)
 
 ## Architecture
 
 ### Backend (`agent311/`)
-- Self-contained backend directory with its own `pyproject.toml`, `uv.lock`, `nixpacks.toml`, `railway.json`, and `start.sh`
+- Self-contained backend directory with its own `pyproject.toml`, `uv.lock`, `railpack.json`, `railway.json`, and `start.sh`
 - Python package: `agent311/agent311/` — contains `main.py`, `auth.py`, `db.py`
 - Entry point: `agent311/agent311/main.py` — FastAPI app with CORS-enabled streaming chat endpoint
 - Chat endpoint: `POST /api/chat` — accepts messages array + optional session_id, returns SSE stream in Vercel AI SDK v6 protocol format
@@ -35,8 +35,8 @@ agent311 is an Austin 311 Data Science Agent — a full-stack application with a
 ### Deployment (Railway)
 - Two separate Railway services: one for backend (`agent311/`), one for frontend (`agentui/`)
 - Backend Root Directory set to `/agent311` in Railway dashboard
-- Backend uses `agent311/nixpacks.toml` with `NIXPACKS_UV_VERSION=0.10.0`
-- Frontend uses `agentui/nixpacks.toml` with Node.js provider, `NEXT_PUBLIC_API_URL` set to production backend URL
+- Backend uses `agent311/railpack.json`; uv auto-detected via mise from `pyproject.toml` + `uv.lock`
+- Frontend uses `agentui/railpack.json`; Node.js and Next.js auto-detected; `NEXT_PUBLIC_API_URL` set in Railway dashboard
 - Railway auto-detects uv via `agent311/pyproject.toml` + `agent311/uv.lock`
 - Start command: `bash start.sh` (downloads 311 data, starts uvicorn)
 
@@ -91,14 +91,14 @@ npm run start
 ## Key Files
 
 - `agent311/pyproject.toml` + `agent311/uv.lock` — Python dependencies
-- `agent311/nixpacks.toml` — Backend Railway config (uv version, system packages, Claude Code CLI install)
-- `agent311/railway.json` — Specifies Nixpacks builder with config path
+- `agent311/railpack.json` — Backend Railway build config (system packages, Claude Code CLI install step)
+- `agent311/railway.json` — Specifies Railpack builder
 - `agent311/start.sh` — Startup script (downloads 311 data, starts uvicorn)
 - `agent311/.python-version` — Pins Python 3.12
 - `agent311/agent311/main.py` — FastAPI app, all endpoints, SSE streaming, MCP tools
 - `agent311/agent311/db.py` — SQLAlchemy async ORM, PostgreSQL config, Session/Message models
 - `agent311/agent311/auth.py` — JWT auth (create_token, get_current_user)
-- `agentui/nixpacks.toml` — Frontend Railway config (Node.js provider, build/start commands)
+- `agentui/railpack.json` — Frontend Railway build config (start command)
 - `agentui/components/chat.tsx` — Main chat orchestrator (SSE, state, layout, view_content fetch)
 - `agentui/components/chat-messages.tsx` — Message rendering, tool summary, artifact cards
 - `agentui/components/sidebar.tsx` — Session list, favorites, delete with confirmation
@@ -120,7 +120,7 @@ This project uses a `~/.env` file (not checked into git) to store local credenti
 - `ANTHROPIC_API_KEY` — Claude API key
 
 **Frontend env var:**
-- `NEXT_PUBLIC_API_URL` — Backend API URL (e.g., `https://agent311-production.up.railway.app`)
+- `NEXT_PUBLIC_API_URL` — Backend API URL (set in Railway dashboard; get URL via `railway domain` in the backend service dir)
 
 **Railway CLI Note:** Use the Railway CLI (installed via `brew install railway`) for deployments. Authenticate with `railway login`.
 

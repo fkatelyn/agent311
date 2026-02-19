@@ -301,8 +301,8 @@ Set environment variables for a service in the active environment.
 mcp__Railway__set-variables(
   workspacePath: "/path/to/repo",
   variables: [
-    "NIXPACKS_PYTHON_PACKAGE_MANAGER=uv",
-    "NIXPACKS_UV_VERSION=0.10.0"
+    "ANTHROPIC_API_KEY=sk-ant-...",
+    "JWT_SECRET=your-secret"
   ],
   service: "agent311"
 )

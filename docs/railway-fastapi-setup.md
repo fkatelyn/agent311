@@ -1,6 +1,6 @@
 # Setting Up FastAPI with uv on Railway
 
-This documents the full process of deploying a FastAPI app using uv as the Python package manager on Railway with Nixpacks.
+This documents the full process of deploying a FastAPI app using uv as the Python package manager on Railway with Railpack.
 
 ## Prerequisites
 
@@ -10,7 +10,7 @@ This documents the full process of deploying a FastAPI app using uv as the Pytho
 
 ## Project Structure
 
-Railway (Nixpacks) requires `pyproject.toml` and `uv.lock` at the **repo root** for auto-detection.
+Railway (Railpack) requires `pyproject.toml` and `uv.lock` at the **service root** for auto-detection.
 
 ```
 repo-root/
@@ -19,7 +19,7 @@ repo-root/
 │   └── main.py              # FastAPI app
 ├── pyproject.toml            # Must be at root
 ├── uv.lock                   # Must be at root
-├── nixpacks.toml             # Nixpacks config
+├── railpack.json             # Railpack config
 ├── railway.json              # Railway builder config
 ├── .python-version           # Python version pin
 └── start.sh                  # Local dev startup
@@ -43,7 +43,7 @@ async def hello():
 
 ## Step 2: Configure pyproject.toml
 
-Must be at the **repo root** (not in a subdirectory).
+Must be at the **service root** (not in a subdirectory).
 
 ```toml
 [project]
@@ -69,32 +69,35 @@ build-backend = "hatchling.build"
 uv lock
 ```
 
-This creates `uv.lock` at the repo root. Commit it to the repo. Nixpacks uses the presence of this file to auto-detect uv as the package manager.
+This creates `uv.lock` at the repo root. Commit it to the repo. Railpack uses the presence of `pyproject.toml` + `uv.lock` to auto-detect uv as the package manager (installed via **mise** at build time).
 
 ## Step 4: Pin Python Version
 
-Create `.python-version` at the repo root:
+Create `.python-version` at the service root:
 
 ```
 3.12
 ```
 
-## Step 5: Configure Nixpacks
+Railpack reads this file automatically — no explicit config needed.
 
-`nixpacks.toml`:
+## Step 5: Configure Railpack
 
-```toml
-[variables]
-NIXPACKS_UV_VERSION = "0.10.0"
+`railpack.json`:
 
-[start]
-cmd = "python -m uvicorn agent311.main:app --host 0.0.0.0 --port ${PORT:-8000}"
+```json
+{
+  "$schema": "https://schema.railpack.com",
+  "deploy": {
+    "startCommand": "python -m uvicorn agent311.main:app --host 0.0.0.0 --port ${PORT:-8000}"
+  }
+}
 ```
 
 **Key details:**
-- `NIXPACKS_UV_VERSION` must be set to a recent version. Nixpacks defaults to `0.4.30` which is ancient and will fail to install.
+- Railpack auto-detects uv from `pyproject.toml` + `uv.lock` and installs the latest uv via mise. No version pin needed.
+- Python version is read from `.python-version` automatically.
 - Use `python -m uvicorn` (not bare `uvicorn`) because the venv `bin/` may not be on PATH at runtime.
-- Do NOT add custom install commands (`[phases.install]`). This overrides Nixpacks' automatic uv installation and causes "uv: command not found" errors. Let Nixpacks handle the install phase automatically.
 
 ## Step 6: Configure Railway Builder
 
@@ -104,33 +107,23 @@ cmd = "python -m uvicorn agent311.main:app --host 0.0.0.0 --port ${PORT:-8000}"
 {
   "$schema": "https://railway.com/railway.schema.json",
   "build": {
-    "builder": "NIXPACKS"
+    "builder": "RAILPACK"
   }
 }
 ```
 
-## Step 7: Set Railway Environment Variable
-
-In the Railway dashboard, go to your service > Variables and add:
-
-```
-NIXPACKS_PYTHON_PACKAGE_MANAGER=uv
-```
-
-This explicitly tells Nixpacks to use uv instead of pip.
-
-## Step 8: Deploy
+## Step 7: Deploy
 
 Push to GitHub. Railway auto-deploys on push.
 
-What Nixpacks does automatically:
-1. Detects `pyproject.toml` + `uv.lock` at repo root
-2. Sets up Python 3.12 via Nix
-3. Creates a venv and installs uv via pip (`pip install uv==$NIXPACKS_UV_VERSION`)
-4. Runs `uv sync --no-dev --frozen` to install all dependencies
-5. Starts the app with the command from `nixpacks.toml`
+What Railpack does automatically:
+1. Detects `pyproject.toml` + `uv.lock` at service root
+2. Installs the latest uv via mise
+3. Sets up Python 3.12 (from `.python-version`)
+4. Runs `uv sync --frozen` to install all dependencies
+5. Starts the app with the command from `railpack.json`
 
-## Step 9: Generate a Public Domain
+## Step 8: Generate a Public Domain
 
 By default, Railway services don't have a public URL. To make it accessible:
 
@@ -138,22 +131,13 @@ By default, Railway services don't have a public URL. To make it accessible:
 2. Click **Settings** > **Networking**
 3. Click **Generate Domain** under Public Networking
 
-This gives you a URL like `https://your-service-production.up.railway.app/`.
+Or via the Railway CLI:
 
-You can also generate a domain via the Railway GraphQL API:
-
-```graphql
-mutation {
-  serviceDomainCreate(
-    input: {
-      serviceId: "your-service-id"
-      environmentId: "your-environment-id"
-    }
-  ) {
-    domain
-  }
-}
+```bash
+railway domain
 ```
+
+This gives you a URL like `https://your-service-production.up.railway.app/`.
 
 ## Verify
 
@@ -168,16 +152,15 @@ Visit `/docs` for the auto-generated FastAPI Swagger UI.
 
 | Error | Cause | Fix |
 |---|---|---|
-| `uv: command not found` | pyproject.toml/uv.lock not at repo root, or custom install phase overrides auto-detection | Move files to root, remove custom `[phases.install]` from nixpacks.toml |
-| `pip install uv==0.4.30` fails | Default uv version is too old | Set `NIXPACKS_UV_VERSION = "0.10.0"` in nixpacks.toml `[variables]` |
+| `uv: command not found` | `pyproject.toml`/`uv.lock` not at service root | Move files to service root |
 | `No module named 'hatchling.backends'` | Wrong build-backend value | Change to `build-backend = "hatchling.build"` |
 | `uvicorn: command not found` | venv bin not on PATH | Use `python -m uvicorn` instead of bare `uvicorn` |
-| `curl: command not found` in start.sh | Minimal container image | Don't install tools at runtime; let Nixpacks handle build-time installs |
+| `curl: command not found` in start.sh | Minimal container image | Don't rely on curl at runtime; install apt packages via `buildAptPackages` in `railpack.json` if needed |
 
 ## Local Development
 
 ```bash
-# From repo root
+# From service root
 uv run uvicorn agent311.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 

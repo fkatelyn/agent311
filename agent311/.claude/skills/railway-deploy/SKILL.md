@@ -5,15 +5,15 @@ description: >
   "set up railway", "deploy python to railway", "deploy react to railway",
   "deploy docker to railway", "check railway status", "debug railway deployment",
   "set railway variables", "generate railway domain", or discusses Railway
-  infrastructure or Nixpacks configuration.
+  infrastructure or Railpack/Nixpacks configuration.
 version: 1.0.0
 ---
 
 # Railway Deployment Skill
 
 Automate Railway deployments via MCP tools. Supports three deployment types:
-- **A:** Python/FastAPI (Nixpacks + uv)
-- **B:** React/JavaScript Frontend (Nixpacks)
+- **A:** Python/FastAPI (Railpack + uv)
+- **B:** React/JavaScript Frontend (Railpack)
 - **C:** Docker Image Service
 
 ## Decision Tree
@@ -76,7 +76,7 @@ mcp__Railway__link-environment(
 
 ---
 
-## Section A: Python/FastAPI (Nixpacks + uv)
+## Section A: Python/FastAPI (Railpack + uv)
 
 ### A.1 — Verify required files exist
 
@@ -85,8 +85,8 @@ Check that all of these exist at the **repo root**:
 | File | Purpose |
 |------|---------|
 | `pyproject.toml` | Project metadata + dependencies |
-| `uv.lock` | Lockfile (triggers uv detection) |
-| `nixpacks.toml` | Nixpacks config (uv version + start command) |
+| `uv.lock` | Lockfile (triggers uv detection via mise) |
+| `railpack.json` | Railpack config (start command) |
 | `railway.json` | Builder config |
 | `.python-version` | Python version pin |
 | `agent311/__init__.py` | Package init (makes module importable) |
@@ -112,13 +112,14 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 ```
 
-**nixpacks.toml:**
-```toml
-[variables]
-NIXPACKS_UV_VERSION = "0.10.0"
-
-[start]
-cmd = "python -m uvicorn agent311.main:app --host 0.0.0.0 --port ${PORT:-8000}"
+**railpack.json:**
+```json
+{
+  "$schema": "https://schema.railpack.com",
+  "deploy": {
+    "startCommand": "python -m uvicorn agent311.main:app --host 0.0.0.0 --port ${PORT:-8000}"
+  }
+}
 ```
 
 **railway.json:**
@@ -126,7 +127,7 @@ cmd = "python -m uvicorn agent311.main:app --host 0.0.0.0 --port ${PORT:-8000}"
 {
   "$schema": "https://railway.com/railway.schema.json",
   "build": {
-    "builder": "NIXPACKS"
+    "builder": "RAILPACK"
   }
 }
 ```
@@ -136,16 +137,7 @@ cmd = "python -m uvicorn agent311.main:app --host 0.0.0.0 --port ${PORT:-8000}"
 3.12
 ```
 
-### A.3 — Set environment variables
-```
-mcp__Railway__set-variables(
-  workspacePath: "<repo-root>",
-  variables: ["NIXPACKS_PYTHON_PACKAGE_MANAGER=uv"],
-  service: "<service-name>"
-)
-```
-
-### A.4 — Deploy
+### A.3 — Deploy
 ```
 mcp__Railway__deploy(
   workspacePath: "<repo-root>",
@@ -153,7 +145,7 @@ mcp__Railway__deploy(
 )
 ```
 
-### A.5 — Generate domain
+### A.4 — Generate domain
 ```
 mcp__Railway__generate-domain(
   workspacePath: "<repo-root>",
@@ -161,7 +153,7 @@ mcp__Railway__generate-domain(
 )
 ```
 
-### A.6 — Verify deployment
+### A.5 — Verify deployment
 ```
 mcp__Railway__list-deployments(
   workspacePath: "<repo-root>",
@@ -180,19 +172,16 @@ mcp__Railway__get-logs(
 )
 ```
 
-### A.7 — Gotchas checklist
+### A.6 — Gotchas checklist
 
-- [ ] `pyproject.toml` and `uv.lock` are at repo root (NOT in a subdirectory)
+- [ ] `pyproject.toml` and `uv.lock` are at service root (NOT in a subdirectory)
 - [ ] `build-backend = "hatchling.build"` (NOT `hatchling.backends`)
-- [ ] `NIXPACKS_UV_VERSION = "0.10.0"` is set (NOT the default `0.4.30`)
 - [ ] Start command uses `python -m uvicorn` (NOT bare `uvicorn`)
-- [ ] No custom `[phases.install]` in nixpacks.toml (breaks auto-detection)
-- [ ] `NIXPACKS_PYTHON_PACKAGE_MANAGER=uv` env var is set
 - [ ] App binds to `0.0.0.0` and uses `${PORT:-8000}`
 
 ---
 
-## Section B: React/JS Frontend (Nixpacks)
+## Section B: React/JS Frontend (Railpack)
 
 ### B.1 — Verify required files exist
 
@@ -201,22 +190,20 @@ Check that these exist in the **frontend directory** (e.g., `frontend/`):
 | File | Purpose |
 |------|---------|
 | `package.json` | Node.js dependencies |
-| `nixpacks.toml` | Build + serve config |
+| `railpack.json` | Build + serve config |
 | `.env.production` | Build-time env vars (VITE_API_URL) |
 | `vite.config.js` | Vite configuration |
 
 ### B.2 — Required file contents
 
-**frontend/nixpacks.toml:**
-```toml
-[variables]
-VITE_API_URL = "https://<backend-domain>.up.railway.app"
-
-[build]
-cmd = "npm install && npm run build"
-
-[start]
-cmd = "npx serve dist"
+**frontend/railpack.json:**
+```json
+{
+  "$schema": "https://schema.railpack.com",
+  "deploy": {
+    "startCommand": "npx serve dist"
+  }
+}
 ```
 
 **frontend/.env.production:**
@@ -280,22 +267,22 @@ mcp__Railway__generate-domain(
 - [ ] `.env.production` exists with `VITE_API_URL` (Vite embeds at build time only)
 - [ ] Root directory set to `frontend/` via Railway API
 - [ ] Backend has `CORSMiddleware` configured
-- [ ] `package.json` is in the frontend root (Nixpacks Node.js detection)
+- [ ] `package.json` is in the frontend root (Railpack Node.js detection)
 - [ ] Railway dashboard vars are runtime only — they do NOT work for `VITE_*`
 
 ---
 
 ## Section C: Docker Image Service
 
-### C.1 — When to use Docker vs Nixpacks
+### C.1 — When to use Docker vs Railpack
 
 Use Docker when:
 - You need precise control over the build environment
-- The app requires system packages not available in Nixpacks
+- The app requires system packages not available in Railpack
 - You have an existing Dockerfile
 - Multi-stage builds are needed for optimization
 
-Use Nixpacks when:
+Use Railpack when:
 - Standard Python or Node.js app
 - You want zero-config deployment
 - Simpler setup is preferred

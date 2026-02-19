@@ -12,7 +12,7 @@ agent311 is a full-stack app: a FastAPI backend that runs a Claude AI agent, and
 | Auth | JWT (PyJWT, HS256) |
 | Frontend | Next.js 16, React 19, Tailwind CSS 4 |
 | UI | AI Elements, shadcn/ui, Streamdown |
-| Deployment | Railway, Nixpacks |
+| Deployment | Railway, Railpack |
 | Package mgmt | uv (Python), npm (JavaScript) |
 
 ## How It Works
@@ -33,7 +33,7 @@ agent311/
 │   ├── .claude/
 │   │   └── skills/        # Claude Code skills (download-311-data, analyze-311-data, visualize, etc.)
 │   ├── pyproject.toml     # Python dependencies (uv)
-│   ├── nixpacks.toml      # Railway build config
+│   ├── railpack.json      # Railway build config
 │   ├── railway.json       # Railway builder config
 │   └── start.sh           # Startup: download 311 data → start uvicorn
 ├── agentui/               # Next.js frontend
@@ -52,7 +52,7 @@ agent311/
 │   │   ├── auth.ts            # JWT login + authFetch wrapper
 │   │   ├── config.ts          # API_URL config
 │   │   └── types.ts           # ChatMessage type
-│   ├── nixpacks.toml          # Railway build config
+│   ├── railpack.json          # Railway build config
 │   └── package.json
 └── docs/
 ```

@@ -25,7 +25,7 @@ repo-root/
 │   └── main.py
 ├── frontend/                  # Vite frontend (root dir: /frontend)
 │   ├── package.json
-│   └── nixpacks.toml
+│   └── railpack.json
 ├── assistantui/               # Next.js frontend (root dir: /assistantui)
 │   ├── app/
 │   │   ├── assistant.tsx      # API URL + runtime config
@@ -36,10 +36,10 @@ repo-root/
 │   │       ├── thread.tsx     # Chat UI with 311 branding
 │   │       └── markdown-text.tsx
 │   ├── package.json           # engines.node >= 20.9.0
-│   ├── nixpacks.toml          # providers = ["node"]
+│   ├── railpack.json          # Railpack config
 │   └── railway.json           # Config-as-code
 ├── pyproject.toml             # Backend (repo root)
-├── nixpacks.toml              # Backend Nixpacks
+├── railpack.json              # Backend Railpack config
 └── railway.json               # Backend Railway config
 ```
 
@@ -70,31 +70,22 @@ repo-root/
 }
 ```
 
-**Critical:** Do NOT include a `"packageManager"` field. The `assistant-ui` scaffolder adds `"packageManager": "pnpm@..."` which will force Nixpacks to use pnpm even if your nixpacks.toml says `npm install`.
+**Critical:** Do NOT include a `"packageManager"` field. The `assistant-ui` scaffolder adds `"packageManager": "pnpm@..."` which will force Railpack to use pnpm, which then fails without a `pnpm-lock.yaml`.
 
-**Critical:** The `"engines"` field is how Nixpacks picks the Node.js version. Without it, Nixpacks defaults to Node.js 18, which is too old for Next.js 16.
+**Critical:** The `"engines"` field is how Railpack picks the Node.js version. Without it, the default Node.js version may be too old for Next.js 16.
 
-### `assistantui/nixpacks.toml`
+### `assistantui/railpack.json`
 
-```toml
-providers = ["node"]
-
-[variables]
-NEXT_PUBLIC_API_URL = "https://agent311-production.up.railway.app"
-
-[install]
-cmd = "npm install"
-
-[build]
-cmd = "npm run build"
-
-[start]
-cmd = "npm start"
+```json
+{
+  "$schema": "https://schema.railpack.com",
+  "deploy": {
+    "startCommand": "npm start"
+  }
+}
 ```
 
-**Critical:** `providers = ["node"]` is required. Without it, Nixpacks sees the root `pyproject.toml` and detects the Python provider instead of Node.
-
-**Note:** Unlike Vite, Next.js reads `NEXT_PUBLIC_*` env vars at both build time AND runtime, so setting them in `[variables]` works (no `.env.production` needed).
+**Note:** Railpack auto-detects Next.js from `package.json`, runs `npm install` → `npm run build` → `npm start` automatically. The `NEXT_PUBLIC_API_URL` variable must be set in the Railway dashboard (build-time env var).
 
 ### `assistantui/railway.json`
 
@@ -102,13 +93,10 @@ cmd = "npm start"
 {
   "$schema": "https://railway.com/railway.schema.json",
   "build": {
-    "builder": "NIXPACKS",
-    "nixpacksConfigPath": "nixpacks.toml"
+    "builder": "RAILPACK"
   }
 }
 ```
-
-**Note:** `nixpacksConfigPath` is relative to the service's root directory (`/assistantui`), so use `"nixpacks.toml"` not `"assistantui/nixpacks.toml"`.
 
 ## Railway Dashboard Setup
 
@@ -153,45 +141,37 @@ mcp__Railway__generate-domain(workspacePath: "...", service: "assistantui")
 
 ## Pitfalls Encountered (Chronological)
 
-### 1. Python Provider Detected Instead of Node
+### 1. Root Directory Not Applied
 
-**Symptom:** Build log shows `Providers: Python` and tries to install pip/uv.
-
-**Cause:** The root `pyproject.toml` exists and Nixpacks auto-detects it even though the root directory is `/assistantui`.
-
-**Fix:** Add `providers = ["node"]` to `assistantui/nixpacks.toml` to force Node.js detection.
-
-### 2. Root Directory Not Applied
-
-**Symptom:** Build uses the root `nixpacks.toml` (Python config) instead of `assistantui/nixpacks.toml`.
+**Symptom:** Build uses the root config instead of `assistantui/railpack.json`.
 
 **Cause:** Root directory was set in the Railway dashboard but not Applied. Railway shows pending changes with an "N changes" badge that must be clicked.
 
 **Fix:** Always click Apply after making any dashboard settings changes.
 
-### 3. pnpm Frozen Lockfile Error
+### 2. pnpm Frozen Lockfile Error
 
 **Symptom:**
 ```
 ERR_PNPM_NO_LOCKFILE Cannot install with "frozen-lockfile" because pnpm-lock.yaml is absent
 ```
 
-**Cause:** `package.json` had `"packageManager": "pnpm@10.28.0"` (added by the `assistant-ui` scaffolder). Nixpacks detects this field and uses pnpm with `--frozen-lockfile`, ignoring the `[install] cmd = "npm install"` in nixpacks.toml.
+**Cause:** `package.json` had `"packageManager": "pnpm@10.28.0"` (added by the `assistant-ui` scaffolder). Railpack detects this field and uses pnpm, which then fails because there's no `pnpm-lock.yaml`.
 
-**Fix:** Remove the `"packageManager"` field from `package.json`. The nixpacks.toml `[install]` override alone is NOT sufficient — Nixpacks' package manager detection happens at the provider level, before phase overrides.
+**Fix:** Remove the `"packageManager"` field from `package.json`.
 
-### 4. Node.js 18 Too Old for Next.js 16
+### 3. Node.js 18 Too Old for Next.js 16
 
 **Symptom:**
 ```
 You are using Node.js 18.20.5. For Next.js, Node.js version ">=20.9.0" is required.
 ```
 
-**Cause:** Nixpacks defaults to `nodejs_18` (Node.js 18.x). Next.js 16 requires Node.js 20+.
+**Cause:** Default Node.js version may be too old. Next.js 16 requires Node.js 20+.
 
-**Fix:** Add `"engines": {"node": ">=20.9.0"}` to `package.json`. Nixpacks reads this field and installs the matching Node.js version.
+**Fix:** Add `"engines": {"node": ">=20.9.0"}` to `package.json`. Railpack reads this field and installs the matching Node.js version.
 
-### 5. Config-as-Code Path Confusion
+### 4. Config-as-Code Path Confusion
 
 **Symptom:** Railway ignores `assistantui/railway.json` and uses root `railway.json` instead.
 
@@ -199,7 +179,7 @@ You are using Node.js 18.20.5. For Next.js, Node.js version ">=20.9.0" is requir
 
 **Fix:** Set Config-as-code to `assistantui/railway.json` in dashboard Settings.
 
-### 6. Backend Loses Conversation Memory
+### 5. Backend Loses Conversation Memory
 
 **Symptom:** Every message gets a fresh "Hello, I'm Agent 311!" response. The agent doesn't remember previous messages.
 
@@ -235,18 +215,21 @@ Before deploying, verify:
 
 - [ ] `assistantui/package.json` has `"engines": {"node": ">=20.9.0"}`
 - [ ] `assistantui/package.json` does NOT have a `"packageManager"` field
-- [ ] `assistantui/nixpacks.toml` has `providers = ["node"]`
-- [ ] `assistantui/railway.json` exists with `"builder": "NIXPACKS"`
+- [ ] `assistantui/railpack.json` exists with `"startCommand": "npm start"`
+- [ ] `assistantui/railway.json` exists with `"builder": "RAILPACK"`
 - [ ] Railway dashboard: Root Directory = `/assistantui`
 - [ ] Railway dashboard: Config-as-code = `assistantui/railway.json`
 - [ ] Railway dashboard: Changes Applied (no pending badge)
+- [ ] `NEXT_PUBLIC_API_URL` set as environment variable in Railway dashboard
 - [ ] Backend handles both `content` and `parts` message formats
 - [ ] Domain generated for the assistantui service
 
 ## Live URLs
 
-| Service | URL |
-|---------|-----|
-| Backend | https://agent311-production.up.railway.app |
-| Vite Frontend | https://frontend-production-893c.up.railway.app |
-| assistant-ui Frontend | https://assistantui-production.up.railway.app |
+Get service URLs via the Railway CLI:
+```bash
+# Run in each service directory
+railway domain
+```
+
+Or via Railway dashboard: Project → service → Settings → Domains.

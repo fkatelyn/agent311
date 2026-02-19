@@ -9,9 +9,9 @@ This documents deploying the Vite React frontend as a separate Railway service a
 The frontend and backend run as **separate Railway services** in the same project:
 
 ```
-Railway Project (powerful-dream)
-├── agent311          (FastAPI backend)  → agent311-production.up.railway.app
-└── frontend          (React app)       → frontend-production-893c.up.railway.app
+Railway Project
+├── agent311          (FastAPI backend)  → <backend>.up.railway.app
+└── frontend          (React app)       → <frontend>.up.railway.app
 ```
 
 The React app fetches data from the FastAPI backend at runtime via `VITE_API_URL`.
@@ -30,10 +30,10 @@ repo-root/
 │   ├── index.html
 │   ├── package.json
 │   ├── vite.config.js
-│   ├── nixpacks.toml          # Frontend Nixpacks config
+│   ├── railpack.json          # Frontend Railpack config
 │   └── .env.production        # Build-time env vars
 ├── pyproject.toml
-├── nixpacks.toml              # Backend Nixpacks config
+├── railpack.json              # Backend Railpack config
 └── railway.json
 ```
 
@@ -84,29 +84,27 @@ Vite embeds `VITE_*` environment variables into the JavaScript bundle **at build
 
 `frontend/.env.production`:
 ```
-VITE_API_URL=https://agent311-production.up.railway.app
+VITE_API_URL=https://<your-backend-service>.up.railway.app
 ```
 
 Vite reads this file automatically during `vite build` in production mode.
 
-**Gotcha:** Railway environment variables and Nixpacks `[variables]` are only available at container runtime, NOT during the Docker build step. Setting `VITE_API_URL` in the Railway dashboard or in `nixpacks.toml [variables]` will **not** work — the value won't be embedded in the Vite bundle. You must use `.env.production`.
+**Gotcha:** Railway environment variables are only available at container runtime, NOT during the Docker build step. Setting `VITE_API_URL` in the Railway dashboard will **not** work for Vite — the value won't be embedded in the bundle. You must use `.env.production`.
 
-## Frontend Nixpacks Config
+## Frontend Railpack Config
 
-`frontend/nixpacks.toml`:
+`frontend/railpack.json`:
 
-```toml
-[variables]
-VITE_API_URL = "https://agent311-production.up.railway.app"
-
-[build]
-cmd = "npm install && npm run build"
-
-[start]
-cmd = "npx serve dist"
+```json
+{
+  "$schema": "https://schema.railpack.com",
+  "deploy": {
+    "startCommand": "npx serve dist"
+  }
+}
 ```
 
-Nixpacks auto-detects Node.js from `package.json`. The build step compiles the React app, and the start step serves the static `dist/` folder using `serve`.
+Railpack auto-detects Node.js from `package.json`. The build step (`npm run build`) compiles the React app, and the start step serves the static `dist/` folder using `serve`.
 
 ## Railway Setup
 
@@ -137,24 +135,20 @@ You can find your service and environment IDs with `railway status --json`.
 
 ### Step 3: Set the Builder
 
-Set the builder to NIXPACKS so it picks up `frontend/nixpacks.toml`:
+Set the builder to RAILPACK via `railway.json` in the frontend directory:
 
-```bash
-curl -s -X POST https://backboard.railway.com/graphql/v2 \
-  -H "Authorization: Bearer $RAILWAY_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "query": "mutation { serviceInstanceUpdate(serviceId: \"<SERVICE_ID>\", environmentId: \"<ENV_ID>\", input: { builder: NIXPACKS }) }"
-  }'
+```json
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "build": {
+    "builder": "RAILPACK"
+  }
+}
 ```
 
 ### Step 4: Set Environment Variables
 
-```bash
-railway variable set --service frontend VITE_API_URL=https://agent311-production.up.railway.app
-```
-
-Note: this is for runtime reference only. The actual build-time value comes from `.env.production`.
+Note: `VITE_API_URL` must come from `.env.production` (committed to the repo), not from Railway dashboard env vars. See the build-time gotcha above.
 
 ### Step 5: Generate a Public Domain
 
@@ -195,4 +189,4 @@ uv run uvicorn agent311.main:app --host 0.0.0.0 --port 8000 --reload
 | "Failed to connect to backend" | `VITE_API_URL` not set at build time | Add `.env.production` with the backend URL |
 | CORS error in browser console | Backend missing CORS middleware | Add `CORSMiddleware` to FastAPI app |
 | Frontend deploys but serves Python app | Root directory not set to `frontend/` | Set `rootDirectory: "frontend"` via Railway API |
-| `npx serve` not found | Node.js not detected by Nixpacks | Ensure `package.json` is in the root directory of the service |
+| `npx serve` not found | Node.js not detected by Railpack | Ensure `package.json` is in the root directory of the service |

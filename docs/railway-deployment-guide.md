@@ -18,9 +18,9 @@ A comprehensive guide to deploying services on Railway using MCP (Model Context 
 - [Railway MCP Setup](#railway-mcp-setup)
 - [MCP Tool Quick Reference](#mcp-tool-quick-reference)
 - [Railway CLI Reference](#railway-cli-reference)
-- [Section A: Python/FastAPI (Nixpacks)](#section-a-pythonfastapi-nixpacks)
-- [Section B: React/Vite Frontend (Nixpacks)](#section-b-reactvite-frontend-nixpacks)
-- [Section B2: Next.js assistant-ui Frontend (Nixpacks)](#section-b2-nextjs-assistant-ui-frontend-nixpacks)
+- [Section A: Python/FastAPI (Railpack)](#section-a-pythonfastapi-railpack)
+- [Section B: React/Vite Frontend (Railpack)](#section-b-reactvite-frontend-railpack)
+- [Section B2: Next.js assistant-ui Frontend (Railpack)](#section-b2-nextjs-assistant-ui-frontend-railpack)
 - [Section C: Docker Image Service](#section-c-docker-image-service)
 - [Multi-Service Architecture](#multi-service-architecture)
 - [MCP Workflow Diagrams](#mcp-workflow-diagrams)
@@ -36,9 +36,9 @@ This guide covers three deployment types, all driven by Railway MCP tools:
 
 | Type | Builder | Use Case |
 |------|---------|----------|
-| **A. Python/FastAPI** | Nixpacks | Backend APIs with uv package manager |
-| **B. React/Vite** | Nixpacks | Vite-based frontends served as static files |
-| **B2. Next.js (assistant-ui)** | Nixpacks | Next.js apps in a monorepo subdirectory |
+| **A. Python/FastAPI** | Railpack | Backend APIs with uv package manager |
+| **B. React/Vite** | Railpack | Vite-based frontends served as static files |
+| **B2. Next.js (assistant-ui)** | Railpack | Next.js apps in a monorepo subdirectory |
 | **C. Docker** | Dockerfile | Custom builds, system dependencies, multi-stage |
 
 Each section includes config files, MCP tool calls, mermaid diagrams, and battle-tested gotchas from real deployments.
@@ -54,17 +54,17 @@ Railway provides an MCP server that exposes 14 tools for managing projects, serv
 ```mermaid
 graph TB
     subgraph Railway Project
-        BE[Backend Service<br>Python/FastAPI<br>Nixpacks]
-        FE[Frontend Service<br>React/Vite<br>Nixpacks]
-        AUI[assistant-ui Service<br>Next.js<br>Nixpacks]
+        BE[Backend Service<br>Python/FastAPI<br>Railpack]
+        FE[Frontend Service<br>React/Vite<br>Railpack]
+        AUI[assistant-ui Service<br>Next.js<br>Railpack]
         DK[Docker Service<br>Custom Image<br>Dockerfile]
     end
 
     subgraph Domains
-        BED[agent311-production.up.railway.app]
-        FED[frontend-production.up.railway.app]
-        AUID[assistantui-production.up.railway.app]
-        DKD[docker-svc-production.up.railway.app]
+        BED[backend.up.railway.app]
+        FED[frontend.up.railway.app]
+        AUID[assistantui.up.railway.app]
+        DKD[docker-svc.up.railway.app]
     end
 
     BE --> BED
@@ -95,7 +95,7 @@ repo-root/
 │   ├── index.html
 │   ├── package.json
 │   ├── vite.config.js
-│   ├── nixpacks.toml          # Frontend Nixpacks config
+│   ├── railpack.json          # Frontend Railpack config
 │   └── .env.production        # Build-time env vars
 ├── assistantui/               # Next.js assistant-ui frontend
 │   ├── app/
@@ -104,11 +104,11 @@ repo-root/
 │   │   └── page.tsx
 │   ├── components/
 │   ├── package.json           # Must have engines.node >= 20
-│   ├── nixpacks.toml          # assistantui Nixpacks config
+│   ├── railpack.json          # assistantui Railpack config
 │   └── railway.json           # Config-as-code for this service
 ├── pyproject.toml             # Must be at repo root
 ├── uv.lock                    # Must be at repo root
-├── nixpacks.toml              # Backend Nixpacks config
+├── railpack.json              # Backend Railpack config
 ├── railway.json               # Railway builder config
 ├── .python-version            # Python version pin (3.12)
 ├── start.sh                   # Local dev startup
@@ -406,9 +406,9 @@ railway shell
 
 ---
 
-## Section A: Python/FastAPI (Nixpacks)
+## Section A: Python/FastAPI (Railpack)
 
-Deploy a FastAPI backend using uv as the package manager and Nixpacks as the builder.
+Deploy a FastAPI backend using uv as the package manager and Railpack as the builder.
 
 ### Prerequisites
 
@@ -440,21 +440,20 @@ build-backend = "hatchling.build"
 
 > **Gotcha:** The build backend is `hatchling.build`, NOT `hatchling.backends` (which doesn't exist and will crash the build).
 
-#### `nixpacks.toml` (repo root)
+#### `railpack.json` (repo root)
 
-```toml
-[variables]
-NIXPACKS_UV_VERSION = "0.10.0"
-
-[start]
-cmd = "python -m uvicorn agent311.main:app --host 0.0.0.0 --port ${PORT:-8000}"
+```json
+{
+  "$schema": "https://schema.railpack.com",
+  "deploy": {
+    "startCommand": "python -m uvicorn agent311.main:app --host 0.0.0.0 --port ${PORT:-8000}"
+  }
+}
 ```
 
-> **Gotcha:** `NIXPACKS_UV_VERSION` MUST be set to a recent version. Nixpacks defaults to `0.4.30`, which is ancient and will fail to install.
+> **Gotcha:** Use `python -m uvicorn`, not bare `uvicorn`. The venv `bin/` may not be on PATH at runtime.
 
-> **Gotcha:** Use `python -m uvicorn`, not bare `uvicorn`. The Nixpacks venv `bin/` may not be on PATH at runtime.
-
-> **Gotcha:** Do NOT add custom `[phases.install]` commands. This overrides Nixpacks' automatic uv installation and causes `uv: command not found`.
+> **Note:** Railpack auto-detects uv from `pyproject.toml` + `uv.lock` and installs the latest uv via mise. No version pin needed.
 
 #### `railway.json` (repo root)
 
@@ -462,7 +461,7 @@ cmd = "python -m uvicorn agent311.main:app --host 0.0.0.0 --port ${PORT:-8000}"
 {
   "$schema": "https://railway.com/railway.schema.json",
   "build": {
-    "builder": "NIXPACKS"
+    "builder": "RAILPACK"
   }
 }
 ```
@@ -480,15 +479,7 @@ Generate with:
 uv lock
 ```
 
-Commit this file. Nixpacks detects uv by the presence of `uv.lock` at repo root.
-
-### Required Environment Variable
-
-```
-NIXPACKS_PYTHON_PACKAGE_MANAGER=uv
-```
-
-This explicitly tells Nixpacks to use uv instead of pip. Set it via MCP (see below) or the Railway dashboard.
+Commit this file. Railpack detects uv by the presence of `pyproject.toml` + `uv.lock` at the service root.
 
 ### MCP Deployment Flow
 
@@ -509,9 +500,6 @@ sequenceDiagram
     C->>R: link-environment(environmentName: "production")
     R-->>C: Linked to production
 
-    C->>R: set-variables(variables: ["NIXPACKS_PYTHON_PACKAGE_MANAGER=uv"])
-    R-->>C: Variable set
-
     C->>R: deploy(service: "agent311")
     R-->>C: Deployment started
 
@@ -519,7 +507,7 @@ sequenceDiagram
     R-->>C: {status: "SUCCESS"}
 
     C->>R: generate-domain(service: "agent311")
-    R-->>C: https://agent311-production.up.railway.app
+    R-->>C: https://&lt;agent311-service&gt;.up.railway.app
 ```
 
 ### Step-by-Step MCP Calls
@@ -541,16 +529,7 @@ mcp__Railway__link-environment(
 )
 ```
 
-**3. Set environment variables:**
-```
-mcp__Railway__set-variables(
-  workspacePath: "/path/to/repo",
-  variables: ["NIXPACKS_PYTHON_PACKAGE_MANAGER=uv"],
-  service: "agent311"
-)
-```
-
-**4. Deploy:**
+**3. Deploy:**
 ```
 mcp__Railway__deploy(
   workspacePath: "/path/to/repo",
@@ -558,7 +537,7 @@ mcp__Railway__deploy(
 )
 ```
 
-**5. Generate public domain:**
+**4. Generate public domain:**
 ```
 mcp__Railway__generate-domain(
   workspacePath: "/path/to/repo",
@@ -566,7 +545,7 @@ mcp__Railway__generate-domain(
 )
 ```
 
-**6. Verify deployment:**
+**5. Verify deployment:**
 ```
 mcp__Railway__list-deployments(
   workspacePath: "/path/to/repo",
@@ -576,7 +555,7 @@ mcp__Railway__list-deployments(
 )
 ```
 
-**7. Check logs if needed:**
+**6. Check logs if needed:**
 ```
 mcp__Railway__get-logs(
   workspacePath: "/path/to/repo",
@@ -589,25 +568,25 @@ mcp__Railway__get-logs(
 ### Verification
 
 ```bash
-curl https://agent311-production.up.railway.app/
+curl https://your-service-production.up.railway.app/
 # {"message":"Hello, World!"}
 ```
 
-Visit `https://agent311-production.up.railway.app/docs` for the auto-generated FastAPI Swagger UI.
+Visit `/docs` for the auto-generated FastAPI Swagger UI.
 
-### What Nixpacks Does Automatically
+### What Railpack Does Automatically
 
-1. Detects `pyproject.toml` + `uv.lock` at repo root
-2. Sets up Python 3.12 via Nix
-3. Creates a venv and installs uv via pip (`pip install uv==$NIXPACKS_UV_VERSION`)
-4. Runs `uv sync --no-dev --frozen` to install all dependencies
-5. Starts the app with the command from `nixpacks.toml`
+1. Detects `pyproject.toml` + `uv.lock` at service root
+2. Installs the latest uv via mise
+3. Sets up Python 3.12 (from `.python-version`)
+4. Runs `uv sync --frozen` to install all dependencies
+5. Starts the app with the command from `railpack.json`
 
 ---
 
-## Section B: React/Vite Frontend (Nixpacks)
+## Section B: React/Vite Frontend (Railpack)
 
-Deploy a Vite React frontend as a separate Railway service that communicates with the FastAPI backend.
+Deploy a Vite React frontend as a separate Railway service that communicates with the FastAPI backend. Railpack auto-detects Node.js from `package.json`.
 
 ### Prerequisites
 
@@ -653,26 +632,24 @@ export default defineConfig({
 });
 ```
 
-#### `frontend/nixpacks.toml`
+#### `frontend/railpack.json`
 
-```toml
-[variables]
-VITE_API_URL = "https://agent311-production.up.railway.app"
-
-[build]
-cmd = "npm install && npm run build"
-
-[start]
-cmd = "npx serve dist"
+```json
+{
+  "$schema": "https://schema.railpack.com",
+  "deploy": {
+    "startCommand": "npx serve dist"
+  }
+}
 ```
 
 #### `frontend/.env.production`
 
 ```
-VITE_API_URL=https://agent311-production.up.railway.app
+VITE_API_URL=https://<your-backend-service>.up.railway.app
 ```
 
-> **Gotcha:** Vite embeds `VITE_*` variables into the JavaScript bundle at **build time**, not runtime. Railway environment variables and Nixpacks `[variables]` are only available at container runtime. You MUST use `.env.production` for Vite build-time variables.
+> **Gotcha:** Vite embeds `VITE_*` variables into the JavaScript bundle at **build time**, not runtime. Railway environment variables are only available at container runtime. You MUST use `.env.production` for Vite build-time variables.
 
 ### CORS on the Backend
 
@@ -723,9 +700,6 @@ sequenceDiagram
 
     Note over C: Set root directory via GraphQL API
 
-    C->>R: set-variables(variables: ["VITE_API_URL=https://..."])
-    R-->>C: Variable set
-
     C->>R: deploy(service: "frontend")
     R-->>C: Deployment started
 
@@ -746,18 +720,9 @@ mcp__Railway__link-service(
 )
 ```
 
-**2. Set environment variables:**
-```
-mcp__Railway__set-variables(
-  workspacePath: "/path/to/repo",
-  variables: ["VITE_API_URL=https://agent311-production.up.railway.app"],
-  service: "frontend"
-)
-```
+**2. Set root directory via GraphQL** (see [Appendix](#set-root-directory))
 
-**3. Set root directory via GraphQL** (see [Appendix](#set-root-directory))
-
-**4. Deploy:**
+**3. Deploy:**
 ```
 mcp__Railway__deploy(
   workspacePath: "/path/to/repo",
@@ -765,7 +730,7 @@ mcp__Railway__deploy(
 )
 ```
 
-**5. Generate domain:**
+**4. Generate domain:**
 ```
 mcp__Railway__generate-domain(
   workspacePath: "/path/to/repo",
@@ -773,7 +738,7 @@ mcp__Railway__generate-domain(
 )
 ```
 
-**6. Verify:**
+**5. Verify:**
 ```
 mcp__Railway__list-deployments(
   workspacePath: "/path/to/repo",
@@ -792,7 +757,7 @@ curl https://frontend-production-xxxx.up.railway.app/
 
 ---
 
-## Section B2: Next.js assistant-ui Frontend (Nixpacks)
+## Section B2: Next.js assistant-ui Frontend (Railpack)
 
 Deploy a Next.js frontend (using [assistant-ui](https://github.com/assistant-ui/assistant-ui)) as a third Railway service in a monorepo. This section documents the real pitfalls encountered deploying `assistantui/` alongside the existing backend and Vite frontend.
 
@@ -814,10 +779,9 @@ For the full step-by-step walkthrough and all gotchas, see the dedicated guide: 
 1. **Root directory** must be set in Railway dashboard (Settings > Root Directory > `/assistantui`) — cannot be set via MCP tools
 2. **Config-as-code path** must be set in Railway dashboard (Settings > Config-as-code > `assistantui/railway.json`) — then Apply changes
 3. **Dashboard changes require Apply** — Railway shows "N changes" badge but doesn't auto-apply
-4. **`packageManager` field in package.json** will override your nixpacks.toml install commands — remove it if using npm
-5. **Node.js 18 is the Nixpacks default** but Next.js 16 requires Node.js 20+ — add `"engines": {"node": ">=20.9.0"}` to package.json
-6. **Force `providers = ["node"]`** in nixpacks.toml or the root `pyproject.toml` causes Python provider detection
-7. **Backend must handle AI SDK v6 message format** — assistant-ui sends `parts` array, not `content` string
+4. **`packageManager` field in package.json** may force a different package manager — remove it if using npm
+5. **Node.js version** — add `"engines": {"node": ">=20.9.0"}` to `package.json` so Railpack installs Node.js 20+
+6. **Backend must handle AI SDK v6 message format** — assistant-ui sends `parts` array, not `content` string
 
 ---
 
@@ -825,9 +789,9 @@ For the full step-by-step walkthrough and all gotchas, see the dedicated guide: 
 
 Deploy a service using a custom Dockerfile instead of Nixpacks.
 
-### When to Use Docker vs Nixpacks
+### When to Use Docker vs Railpack
 
-| Criteria | Nixpacks | Docker |
+| Criteria | Railpack | Docker |
 |----------|----------|--------|
 | Standard Python/Node.js app | Yes | Overkill |
 | Custom system packages | Limited | Yes |
@@ -996,21 +960,21 @@ repo-root/
 ├── frontend/         ← Vite frontend service (root dir: /frontend)
 │   ├── src/
 │   ├── package.json
-│   └── nixpacks.toml
+│   └── railpack.json
 ├── assistantui/      ← Next.js frontend service (root dir: /assistantui)
 │   ├── app/
 │   ├── package.json
-│   ├── nixpacks.toml
+│   ├── railpack.json
 │   └── railway.json  ← Config-as-code for this service
 ├── pyproject.toml    ← Backend config (at repo root)
-├── nixpacks.toml     ← Backend Nixpacks config
+├── railpack.json     ← Backend Railpack config
 └── railway.json      ← Backend Railway config
 ```
 
 Each Railway service in the same project can have a different **root directory**:
-- Backend: `/` (repo root) — reads `pyproject.toml`, `nixpacks.toml`, `railway.json`
-- Frontend: `/frontend` — reads `frontend/package.json`, `frontend/nixpacks.toml`
-- assistant-ui: `/assistantui` — reads `assistantui/package.json`, `assistantui/nixpacks.toml`, `assistantui/railway.json`
+- Backend: `/` (repo root) — reads `pyproject.toml`, `railpack.json`, `railway.json`
+- Frontend: `/frontend` — reads `frontend/package.json`, `frontend/railpack.json`
+- assistant-ui: `/assistantui` — reads `assistantui/package.json`, `assistantui/railpack.json`, `assistantui/railway.json`
 
 ### Service Linking and Root Directories
 
@@ -1110,8 +1074,7 @@ flowchart TD
 
 | Error | Cause | Fix |
 |-------|-------|-----|
-| `uv: command not found` | `pyproject.toml`/`uv.lock` not at repo root, or custom install phase | Move files to root, remove `[phases.install]` |
-| `pip install uv==0.4.30` fails | Default uv version too old | Set `NIXPACKS_UV_VERSION = "0.10.0"` |
+| `uv: command not found` | `pyproject.toml`/`uv.lock` not at service root | Move files to service root |
 | `No module named 'hatchling.backends'` | Wrong `build-backend` value | Use `build-backend = "hatchling.build"` |
 | `uvicorn: command not found` | venv bin not on PATH | Use `python -m uvicorn` |
 | App not reachable | No public domain | Run `generate-domain` |
@@ -1129,9 +1092,8 @@ flowchart TD
 
 | Error | Cause | Fix |
 |-------|-------|-----|
-| `Node.js version ">=20.9.0" is required` | Nixpacks defaults to Node.js 18 | Add `"engines": {"node": ">=20.9.0"}` to `package.json` |
+| `Node.js version ">=20.9.0" is required` | Railpack picks up `engines.node` from `package.json` | Add `"engines": {"node": ">=20.9.0"}` to `package.json` |
 | `pnpm i --frozen-lockfile` fails, no lockfile | `packageManager` field in `package.json` forces pnpm | Remove `"packageManager": "pnpm@..."` from `package.json` |
-| Python provider detected instead of Node | Root `pyproject.toml` confuses Nixpacks | Add `providers = ["node"]` to `nixpacks.toml` |
 | Config-as-code not picked up | Path not set or changes not applied | Set Config-as-code to `assistantui/railway.json` in dashboard, then Apply |
 | Agent loses conversation memory | Backend reads `content` but AI SDK v6 sends `parts` | Handle both `msg.content` and `msg.parts` in backend |
 | Root directory ignored | Dashboard changes pending | Click Apply after changing settings (check "N changes" badge) |
@@ -1143,7 +1105,7 @@ flowchart TD
 | `Dockerfile not found` | Wrong location or root dir | Move to root or set root directory |
 | Build context too large | No `.dockerignore` | Add `.dockerignore` |
 | Port mismatch | `EXPOSE` doesn't match app port | Align `EXPOSE`, app port, and `PORT` env var |
-| Builder not set | Railway defaults to Nixpacks | Set `"builder": "DOCKERFILE"` in `railway.json` |
+| Builder not set | Railway defaults to Railpack | Set `"builder": "DOCKERFILE"` in `railway.json` |
 
 ### MCP Tools
 
@@ -1201,7 +1163,7 @@ curl -s -X POST https://backboard.railway.com/graphql/v2 \
   }'
 ```
 
-Valid builder values: `NIXPACKS`, `DOCKERFILE`
+Valid builder values: `RAILPACK`, `NIXPACKS`, `DOCKERFILE`
 
 ### Create Domain via GraphQL
 
@@ -1279,9 +1241,8 @@ User: "Deploy the backend to Railway"
 The skill activates and Claude Code:
 1. Checks Railway CLI status
 2. Links to the correct project/service/environment
-3. Verifies `pyproject.toml`, `uv.lock`, `nixpacks.toml`, `railway.json` exist
-4. Sets `NIXPACKS_PYTHON_PACKAGE_MANAGER=uv`
-5. Deploys via `mcp__Railway__deploy`
+3. Verifies `pyproject.toml`, `uv.lock`, `railpack.json`, `railway.json` exist
+4. Deploys via `mcp__Railway__deploy`
 6. Generates a domain
 7. Verifies the deployment succeeded
 

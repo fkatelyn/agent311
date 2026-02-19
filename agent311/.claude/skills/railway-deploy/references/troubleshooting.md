@@ -1,34 +1,32 @@
 # Railway Deployment Troubleshooting
 
-Consolidated error table and gotchas for Railway deployments using Nixpacks, Docker, and MCP tools.
+Consolidated error table and gotchas for Railway deployments using Railpack, Docker, and MCP tools.
 
 ---
 
-## Python / FastAPI (Nixpacks + uv)
+## Python / FastAPI (Railpack + uv)
 
 | Error | Symptom | Cause | Fix |
 |-------|---------|-------|-----|
-| `uv: command not found` | Build fails immediately | `pyproject.toml` and `uv.lock` not at repo root, or custom `[phases.install]` in nixpacks.toml overrides auto-detection | Move both files to repo root. Remove any custom install phases from `nixpacks.toml` |
-| `pip install uv==0.4.30` fails | Build crashes during uv install | Default Nixpacks uv version (0.4.30) is too old | Set `NIXPACKS_UV_VERSION = "0.10.0"` in `nixpacks.toml` `[variables]` |
+| `uv: command not found` | Build fails immediately | `pyproject.toml` and `uv.lock` not at service root | Move both files to service root |
 | `No module named 'hatchling.backends'` | Build fails resolving build-system | Wrong `build-backend` value in `pyproject.toml` | Change to `build-backend = "hatchling.build"` |
-| `uvicorn: command not found` | App starts but crashes immediately | Nixpacks venv `bin/` not on PATH at runtime | Use `python -m uvicorn` instead of bare `uvicorn` |
-| `ModuleNotFoundError: No module named 'agent311'` | Runtime import error | Package structure issue or missing `__init__.py` | Ensure `agent311/__init__.py` exists and `pyproject.toml` is at repo root |
+| `uvicorn: command not found` | App starts but crashes immediately | venv `bin/` not on PATH at runtime | Use `python -m uvicorn` instead of bare `uvicorn` |
+| `ModuleNotFoundError: No module named 'agent311'` | Runtime import error | Package structure issue or missing `__init__.py` | Ensure `agent311/__init__.py` exists and `pyproject.toml` is at service root |
 | `Address already in use` | Deployment crashes on start | Hardcoded port conflicts with Railway's PORT | Use `${PORT:-8000}` in start command |
 | Build succeeds but app not reachable | No public URL | Domain not generated | Run `mcp__Railway__generate-domain` or add domain in Railway dashboard |
-| `NIXPACKS_PYTHON_PACKAGE_MANAGER` not set | Nixpacks uses pip instead of uv | Env var not configured | Set `NIXPACKS_PYTHON_PACKAGE_MANAGER=uv` via `mcp__Railway__set-variables` or Railway dashboard |
 
 ---
 
-## React / JavaScript Frontend (Nixpacks)
+## React / JavaScript Frontend (Railpack)
 
 | Error | Symptom | Cause | Fix |
 |-------|---------|-------|-----|
 | "Failed to connect to backend" | Frontend loads but API calls fail | `VITE_API_URL` not set at build time | Add `.env.production` with backend URL. Vite embeds `VITE_*` vars at build time only |
 | CORS error in browser console | Browser blocks cross-origin requests | Backend missing CORS middleware | Add `CORSMiddleware` to FastAPI with `allow_origins=["*"]` |
 | Frontend deploys but serves Python app | Wrong app running on frontend service | Root directory not set to `frontend/` | Set `rootDirectory: "frontend"` via Railway GraphQL API (`serviceInstanceUpdate`) |
-| `npx serve: command not found` | Start command fails | Node.js not detected by Nixpacks | Ensure `package.json` is in the root directory of the service (after root dir is set) |
+| `npx serve: command not found` | Start command fails | Node.js not detected by Railpack | Ensure `package.json` is in the root directory of the service (after root dir is set) |
 | `VITE_API_URL` is `undefined` at runtime | API calls go to wrong URL | Set var in Railway dashboard instead of `.env.production` | Railway vars are runtime only; Vite needs them at build time. Use `.env.production` |
-| Blank page after deploy | JS bundle has errors | Build command not configured | Set `[build] cmd = "npm install && npm run build"` in `nixpacks.toml` |
+| Blank page after deploy | JS bundle has errors | Build step didn't run | Ensure `railpack.json` `startCommand` runs after build, and build scripts are in `package.json` |
 | `dist/` not found | Serve command can't find built files | Build step didn't run or output dir mismatch | Check Vite `build.outDir` matches serve command path |
 
 ---
@@ -41,7 +39,7 @@ Consolidated error table and gotchas for Railway deployments using Nixpacks, Doc
 | Build context too large | Build is slow or times out | No `.dockerignore` | Add `.dockerignore` excluding `node_modules/`, `.git/`, `__pycache__/`, etc. |
 | `EXPOSE` port mismatch | App starts but not reachable | Container exposes different port than app listens on | Ensure `EXPOSE` matches app port and use `${PORT:-8000}` |
 | Multi-stage build fails | Missing files in final image | Files not copied from builder stage | Verify `COPY --from=builder` paths match build stage output |
-| Railway can't detect Dockerfile | Falls back to Nixpacks | `railway.json` builder not set to `DOCKERFILE` | Set `"builder": "DOCKERFILE"` in `railway.json` |
+| Railway can't detect Dockerfile | Falls back to Railpack | `railway.json` builder not set to `DOCKERFILE` | Set `"builder": "DOCKERFILE"` in `railway.json` |
 
 ---
 
