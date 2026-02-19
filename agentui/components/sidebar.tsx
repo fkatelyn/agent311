@@ -77,7 +77,7 @@ export function Sidebar({
             "shrink-0 rounded p-0.5",
             isFav
               ? "text-yellow-500"
-              : "hidden text-muted-foreground hover:text-yellow-500 group-hover:block"
+              : "text-muted-foreground/40 hover:text-yellow-500"
           )}
         >
           <StarIcon
@@ -90,7 +90,7 @@ export function Sidebar({
             e.stopPropagation();
             setDeleteTargetId(session.id);
           }}
-          className="hidden shrink-0 rounded p-0.5 text-muted-foreground hover:text-destructive group-hover:block"
+          className="shrink-0 rounded p-0.5 text-muted-foreground/40 hover:text-destructive"
         >
           <Trash2Icon className="h-3.5 w-3.5" />
         </button>
