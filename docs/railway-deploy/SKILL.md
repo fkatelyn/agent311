@@ -6,12 +6,12 @@ description: >
   "deploy docker to railway", "check railway status", "debug railway deployment",
   "set railway variables", "generate railway domain", or discusses Railway
   infrastructure or Railpack/Nixpacks configuration.
-version: 1.0.0
+version: 2.0.0
 ---
 
 # Railway Deployment Skill
 
-Automate Railway deployments via MCP tools. Supports three deployment types:
+Automate Railway deployments via the Railway CLI. Supports three deployment types:
 - **A:** Python/FastAPI (Railpack + uv)
 - **B:** React/JavaScript Frontend (Railpack)
 - **C:** Docker Image Service
@@ -23,7 +23,7 @@ Determine the deployment type from the user's request:
 | Signal | Type |
 |--------|------|
 | Python, FastAPI, uvicorn, uv, `pyproject.toml` | **A — Python/FastAPI** |
-| React, Vite, Node, frontend, JavaScript, `package.json` | **B — React/JS Frontend** |
+| Next.js, React, Node, frontend, JavaScript, `package.json`, agentui | **B — Next.js Frontend** |
 | Docker, Dockerfile, container, image | **C — Docker** |
 | Unclear | Ask the user which type |
 
@@ -34,44 +34,37 @@ Determine the deployment type from the user's request:
 Run these before every deployment:
 
 ### 0.1 — Verify Railway CLI and auth
+```bash
+railway whoami
 ```
-mcp__Railway__check-railway-status()
-```
-- If not logged in: instruct the user to run `railway login --browserless`
-- If CLI not installed: instruct the user to install via `npm install -g @railway/cli`
+- If not logged in: instruct the user to run `railway login`
+- If CLI not installed: instruct the user to install via `brew install railway`
 
 ### 0.2 — Find or create project
+```bash
+railway list
 ```
-mcp__Railway__list-projects()
-```
-- If the target project exists, proceed to link it
+- If the target project exists, link to it:
+  ```bash
+  railway link
+  ```
 - If not, create one:
-```
-mcp__Railway__create-project-and-link(
-  projectName: "<project-name>",
-  workspacePath: "<repo-root>"
-)
-```
+  ```bash
+  railway init
+  ```
 
-### 0.3 — Check existing services
+### 0.3 — Check existing services and link
+```bash
+railway status
 ```
-mcp__Railway__list-services(workspacePath: "<repo-root>")
-```
-- Identify if the target service already exists
-- Link to it if needed:
-```
-mcp__Railway__link-service(
-  workspacePath: "<repo-root>",
-  serviceName: "<service-name>"
-)
-```
+- Link to target service:
+  ```bash
+  railway service <service-name>
+  ```
 
 ### 0.4 — Link environment
-```
-mcp__Railway__link-environment(
-  workspacePath: "<repo-root>",
-  environmentName: "production"
-)
+```bash
+railway environment production
 ```
 
 ---
@@ -80,7 +73,7 @@ mcp__Railway__link-environment(
 
 ### A.1 — Verify required files exist
 
-Check that all of these exist at the **repo root**:
+Check that all of these exist at the **service root** (e.g., `agent311/`):
 
 | File | Purpose |
 |------|---------|
@@ -102,7 +95,7 @@ name = "agent311"
 version = "0.1.0"
 requires-python = ">=3.11"
 dependencies = [
-    "claude-code-sdk",
+    "claude-agent-sdk",
     "fastapi",
     "uvicorn",
 ]
@@ -138,38 +131,32 @@ build-backend = "hatchling.build"
 ```
 
 ### A.3 — Deploy
-```
-mcp__Railway__deploy(
-  workspacePath: "<repo-root>",
-  service: "<service-name>"
-)
+```bash
+cd <service-dir>
+railway link
+railway service <service-name>
+railway environment production
+railway up
 ```
 
 ### A.4 — Generate domain
-```
-mcp__Railway__generate-domain(
-  workspacePath: "<repo-root>",
-  service: "<service-name>"
-)
+```bash
+railway domain
 ```
 
 ### A.5 — Verify deployment
-```
-mcp__Railway__list-deployments(
-  workspacePath: "<repo-root>",
-  service: "<service-name>",
-  json: true,
-  limit: 3
-)
+```bash
+railway status
+railway logs --lines 50
 ```
 
 If deployment failed, check logs:
-```
-mcp__Railway__get-logs(
-  workspacePath: "<repo-root>",
-  logType: "build",
-  service: "<service-name>"
-)
+```bash
+# Build logs
+railway logs --lines 100
+
+# Filter for errors
+railway logs --filter "error" --lines 50
 ```
 
 ### A.6 — Gotchas checklist
@@ -181,48 +168,37 @@ mcp__Railway__get-logs(
 
 ---
 
-## Section B: React/JS Frontend (Railpack)
+## Section B: Next.js Frontend (Railpack)
 
 ### B.1 — Verify required files exist
 
-Check that these exist in the **frontend directory** (e.g., `frontend/`):
+Check that these exist in the **`agentui/`** directory:
 
 | File | Purpose |
 |------|---------|
 | `package.json` | Node.js dependencies |
-| `railpack.json` | Build + serve config |
-| `.env.production` | Build-time env vars (VITE_API_URL) |
-| `vite.config.js` | Vite configuration |
+| `railpack.json` | Start command config |
+| `next.config.ts` | Next.js configuration |
 
 ### B.2 — Required file contents
 
-**frontend/railpack.json:**
+**agentui/railpack.json:**
 ```json
 {
   "$schema": "https://schema.railpack.com",
   "deploy": {
-    "startCommand": "npx serve dist"
+    "startCommand": "npm run start"
   }
 }
 ```
 
-**frontend/.env.production:**
-```
-VITE_API_URL=https://<backend-domain>.up.railway.app
-```
-
 ### B.3 — Set root directory
 
-The frontend lives in a subdirectory. Set the root directory via Railway GraphQL API:
+The frontend lives in `agentui/`. Set the root directory in the Railway dashboard:
 
-```bash
-curl -s -X POST https://backboard.railway.com/graphql/v2 \
-  -H "Authorization: Bearer $RAILWAY_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "query": "mutation { serviceInstanceUpdate(serviceId: \"<SERVICE_ID>\", environmentId: \"<ENV_ID>\", input: { rootDirectory: \"frontend\" }) }"
-  }'
-```
+**Settings > General > Root Directory → set to `agentui`**
+
+Then redeploy from the dashboard or run `railway up` from inside the `agentui/` directory.
 
 ### B.4 — Ensure CORS on backend
 
@@ -239,36 +215,25 @@ app.add_middleware(
 ```
 
 ### B.5 — Link service and deploy
-```
-mcp__Railway__link-service(
-  workspacePath: "<repo-root>",
-  serviceName: "frontend"
-)
+```bash
+cd agentui
+railway link
+railway service agentui
+railway environment production
 
-mcp__Railway__set-variables(
-  workspacePath: "<repo-root>",
-  variables: ["VITE_API_URL=https://<backend-domain>.up.railway.app"],
-  service: "frontend"
-)
+# Set variables
+railway variables set NEXT_PUBLIC_API_URL=https://<backend-domain>.up.railway.app
 
-mcp__Railway__deploy(
-  workspacePath: "<repo-root>",
-  service: "frontend"
-)
-
-mcp__Railway__generate-domain(
-  workspacePath: "<repo-root>",
-  service: "frontend"
-)
+railway up
+railway domain
 ```
 
 ### B.6 — Gotchas checklist
 
-- [ ] `.env.production` exists with `VITE_API_URL` (Vite embeds at build time only)
-- [ ] Root directory set to `frontend/` via Railway API
+- [ ] `NEXT_PUBLIC_API_URL` set via `railway variables set` before deploy
+- [ ] Root directory set to `agentui/` in Railway dashboard
 - [ ] Backend has `CORSMiddleware` configured
-- [ ] `package.json` is in the frontend root (Railpack Node.js detection)
-- [ ] Railway dashboard vars are runtime only — they do NOT work for `VITE_*`
+- [ ] `package.json` is in `agentui/` (Railpack Node.js detection)
 
 ---
 
@@ -337,33 +302,15 @@ CMD ["serve", "dist", "-l", "3000"]
 }
 ```
 
-Or via GraphQL API:
-```bash
-curl -s -X POST https://backboard.railway.com/graphql/v2 \
-  -H "Authorization: Bearer $RAILWAY_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "query": "mutation { serviceInstanceUpdate(serviceId: \"<SERVICE_ID>\", environmentId: \"<ENV_ID>\", input: { builder: DOCKERFILE }) }"
-  }'
-```
-
 ### C.5 — Deploy
-```
-mcp__Railway__set-variables(
-  workspacePath: "<repo-root>",
-  variables: ["PORT=8000"],
-  service: "<service-name>"
-)
+```bash
+railway link
+railway service <service-name>
+railway environment production
 
-mcp__Railway__deploy(
-  workspacePath: "<repo-root>",
-  service: "<service-name>"
-)
-
-mcp__Railway__generate-domain(
-  workspacePath: "<repo-root>",
-  service: "<service-name>"
-)
+railway variables set PORT=8000
+railway up
+railway domain
 ```
 
 ### C.6 — Gotchas checklist
@@ -378,54 +325,28 @@ mcp__Railway__generate-domain(
 ## Debugging Failed Deployments
 
 ### Step 1: Check build logs
-```
-mcp__Railway__get-logs(
-  workspacePath: "<repo-root>",
-  logType: "build",
-  service: "<service-name>",
-  lines: 100
-)
+```bash
+railway logs --lines 100
 ```
 
-### Step 2: Check deploy logs (runtime)
-```
-mcp__Railway__get-logs(
-  workspacePath: "<repo-root>",
-  logType: "deploy",
-  service: "<service-name>",
-  lines: 100
-)
+### Step 2: Stream live deploy logs
+```bash
+railway logs --follow
 ```
 
 ### Step 3: Filter for errors
-```
-mcp__Railway__get-logs(
-  workspacePath: "<repo-root>",
-  logType: "deploy",
-  service: "<service-name>",
-  filter: "@level:error",
-  lines: 50
-)
+```bash
+railway logs --filter "error" --lines 50
 ```
 
 ### Step 4: Verify environment variables
-```
-mcp__Railway__list-variables(
-  workspacePath: "<repo-root>",
-  service: "<service-name>",
-  kv: true
-)
+```bash
+railway variables
 ```
 
 ### Step 5: Check deployment status
-```
-mcp__Railway__list-deployments(
-  workspacePath: "<repo-root>",
-  service: "<service-name>",
-  json: true,
-  limit: 5
-)
+```bash
+railway status
 ```
 
 For detailed error references, see [references/troubleshooting.md](references/troubleshooting.md).
-For full MCP tool API details, see [references/mcp-tool-reference.md](references/mcp-tool-reference.md).
