@@ -66,8 +66,6 @@ export function Sidebar({
         )}
         onClick={() => onSelectSession(session.id)}
       >
-        <MessageSquareIcon className="h-3.5 w-3.5 shrink-0" />
-        <span className="min-w-0 flex-1 truncate">{session.title}</span>
         <button
           onClick={(e) => {
             e.stopPropagation();
@@ -94,6 +92,7 @@ export function Sidebar({
         >
           <Trash2Icon className="h-3.5 w-3.5" />
         </button>
+        <span className="min-w-0 flex-1 truncate">{session.title}</span>
       </div>
     );
   }
@@ -107,16 +106,6 @@ export function Sidebar({
           <Button variant="ghost" size="icon" onClick={onNewChat} className="h-7 w-7">
             <PlusIcon className="h-4 w-4" />
           </Button>
-          {currentSessionId && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7 text-muted-foreground hover:text-destructive"
-              onClick={() => setDeleteTargetId(currentSessionId)}
-            >
-              <Trash2Icon className="h-4 w-4" />
-            </Button>
-          )}
           <Button variant="ghost" size="icon" onClick={onToggle} className="h-7 w-7">
             <PanelLeftCloseIcon className="h-4 w-4" />
           </Button>
