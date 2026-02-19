@@ -3,7 +3,7 @@
   "packages": {
     "node": "18"
   },
-  "buildAptPackages": ["gcc", "postgresql-client", "curl"],
+  "buildAptPackages": ["gcc", "postgresql-client"],
   "steps": {
     "install-cli": {
       "inputs": [{ "step": "install" }],
@@ -11,6 +11,7 @@
     }
   },
   "deploy": {
+    "aptPackages": ["curl"],
     "startCommand": "bash start.sh"
   }
 }
