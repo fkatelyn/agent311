@@ -1,8 +1,18 @@
 "use client";
 
+import { useState } from "react";
 import { cn } from "@/lib/utils";
 import type { ChatSession } from "@/lib/chat-store";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+  DialogClose,
+} from "@/components/ui/dialog";
 import {
   PlusIcon,
   Trash2Icon,
@@ -36,6 +46,8 @@ export function Sidebar({
   onToggleFavorite,
   onLogout,
 }: SidebarProps) {
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
+
   if (!open) return null;
 
   const favorites = sessions.filter((s) => s.isFavorite);
@@ -76,7 +88,7 @@ export function Sidebar({
         <button
           onClick={(e) => {
             e.stopPropagation();
-            onDeleteSession(session.id);
+            setDeleteTargetId(session.id);
           }}
           className="hidden shrink-0 rounded p-0.5 text-muted-foreground hover:text-destructive group-hover:block"
         >
@@ -132,6 +144,30 @@ export function Sidebar({
           </Button>
         )}
       </div>
+      <Dialog open={deleteTargetId !== null} onOpenChange={() => setDeleteTargetId(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete chat?</DialogTitle>
+            <DialogDescription>
+              This will permanently delete this chat session.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button variant="outline">Cancel</Button>
+            </DialogClose>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                if (deleteTargetId) onDeleteSession(deleteTargetId);
+                setDeleteTargetId(null);
+              }}
+            >
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
