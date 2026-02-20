@@ -26,6 +26,28 @@ export async function fetchReportContent(
   return res.json();
 }
 
+export async function uploadReport(file: File): Promise<ReportFile> {
+  const form = new FormData();
+  form.append("file", file);
+  const res = await authFetch(`${API_URL}/api/reports/upload`, {
+    method: "POST",
+    body: form,
+  });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => res.statusText);
+    throw new Error(`Upload failed: ${detail}`);
+  }
+  return res.json();
+}
+
+export async function deleteReportApi(filename: string): Promise<void> {
+  const res = await authFetch(
+    `${API_URL}/api/reports/${encodeURIComponent(filename)}`,
+    { method: "DELETE" }
+  );
+  if (!res.ok) throw new Error(`Failed to delete report: ${res.status}`);
+}
+
 export async function downloadReport(path: string, filename: string) {
   const res = await authFetch(
     `${API_URL}/api/reports/download?path=${encodeURIComponent(path)}`

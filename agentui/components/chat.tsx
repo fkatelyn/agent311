@@ -24,7 +24,10 @@ import {
   fetchReports,
   fetchReportContent,
   downloadReport,
+  uploadReport,
+  deleteReportApi,
 } from "@/lib/reports-api";
+import { UploadIcon } from "lucide-react";
 
 const VIEW_CONTENT_TOOL_RE = /\[Using tool:\s*view_content\s+([^\]\n]+)\](?:\\n|\n)?/g;
 const SAVE_REPORT_TOOL_RE = /\[Using tool:\s*save_report\s+([^\]\n]+)\](?:\\n|\n)?/g;
@@ -87,7 +90,9 @@ export function Chat() {
   const [sidebarMode, setSidebarMode] = useState<SidebarMode>("chats");
   const [sidebarWidth, setSidebarWidth] = useState(256);
   const [reports, setReports] = useState<ReportFile[]>([]);
+  const [isDragging, setIsDragging] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
+  const dragCounter = useRef(0);
 
   // Auth check + load sessions on mount
   useEffect(() => {
@@ -195,6 +200,19 @@ export function Chat() {
     [currentSessionId, handleNewChat]
   );
 
+  const handleRenameSession = useCallback(
+    async (id: string, title: string) => {
+      try {
+        await updateSessionTitle(id, title);
+        if (id === currentSessionId) setCurrentTitle(title);
+        await refreshSessionList();
+      } catch {
+        // ignore
+      }
+    },
+    [currentSessionId]
+  );
+
   const handleToggleFavorite = useCallback(
     async (id: string, isFavorite: boolean) => {
       try {
@@ -238,6 +256,31 @@ export function Chat() {
       // ignore
     }
   }, []);
+
+  const handleUploadFile = useCallback(async (file: File) => {
+    try {
+      await uploadReport(file);
+      await refreshReports();
+      setSidebarMode("files");
+      setSidebarOpen(true);
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const handleDeleteReport = useCallback(async (report: ReportFile) => {
+    try {
+      await deleteReportApi(report.name);
+      await refreshReports();
+      // If the deleted report is currently displayed, close the artifact panel
+      if (activeReport?.path === report.path) {
+        setArtifactCode(null);
+        setActiveReport(null);
+      }
+    } catch {
+      // ignore
+    }
+  }, [activeReport]);
 
   const handleSubmit = useCallback(
     async (text: string) => {
@@ -407,8 +450,62 @@ export function Chat() {
     isFavorite: s.isFavorite,
   }));
 
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  }, []);
+
+  const handleDragEnter = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounter.current++;
+    if (dragCounter.current === 1) setIsDragging(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounter.current--;
+    if (dragCounter.current === 0) setIsDragging(false);
+  }, []);
+
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dragCounter.current = 0;
+      setIsDragging(false);
+
+      const files = Array.from(e.dataTransfer.files);
+      const allowed = files.filter((f) => {
+        const ext = f.name.toLowerCase().match(/\.[^.]+$/)?.[0];
+        return ext === ".pdf" || ext === ".html";
+      });
+      for (const file of allowed) {
+        handleUploadFile(file);
+      }
+    },
+    [handleUploadFile]
+  );
+
   return (
-    <div className="flex h-dvh overflow-hidden bg-background">
+    <div
+      className="flex h-dvh overflow-hidden bg-background relative"
+      onDragOver={handleDragOver}
+      onDragEnter={handleDragEnter}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      {isDragging && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
+          <div className="flex flex-col items-center gap-3 rounded-xl border-2 border-dashed border-primary/50 bg-muted/50 px-12 py-10">
+            <UploadIcon className="h-10 w-10 text-primary/70" />
+            <p className="text-sm font-medium text-muted-foreground">
+              Drop PDF or HTML files to upload
+            </p>
+          </div>
+        </div>
+      )}
       <Sidebar
         sessions={sidebarSessions}
         currentSessionId={currentSessionId}
@@ -417,12 +514,15 @@ export function Chat() {
         onNewChat={handleNewChat}
         onSelectSession={handleSelectSession}
         onDeleteSession={handleDeleteSession}
+        onRenameSession={handleRenameSession}
         onToggleFavorite={handleToggleFavorite}
         onLogout={handleLogout}
         mode={sidebarMode}
         onModeChange={setSidebarMode}
         reports={reports}
         onSelectReport={handleSelectReport}
+        onUploadFile={handleUploadFile}
+        onDeleteReport={handleDeleteReport}
         width={sidebarWidth}
         onWidthChange={setSidebarWidth}
       />

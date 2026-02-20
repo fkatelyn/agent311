@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import type { ChatSession } from "@/lib/chat-store";
 import type { ReportFile } from "@/lib/reports-api";
@@ -30,7 +30,17 @@ import {
   FileTextIcon,
   ImageIcon,
   TableIcon,
+  UploadIcon,
+  MoreHorizontalIcon,
+  PencilIcon,
 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 export type SidebarMode = "chats" | "files";
@@ -43,12 +53,15 @@ interface SidebarProps {
   onNewChat: () => void;
   onSelectSession: (id: string) => void;
   onDeleteSession: (id: string) => void;
+  onRenameSession: (id: string, title: string) => void;
   onToggleFavorite: (id: string, isFavorite: boolean) => void;
   onLogout?: () => void;
   mode: SidebarMode;
   onModeChange: (mode: SidebarMode) => void;
   reports: ReportFile[];
   onSelectReport: (report: ReportFile) => void;
+  onUploadFile: (file: File) => void;
+  onDeleteReport: (report: ReportFile) => void;
   width: number;
   onWidthChange: (width: number) => void;
 }
@@ -76,17 +89,36 @@ export function Sidebar({
   onNewChat,
   onSelectSession,
   onDeleteSession,
+  onRenameSession,
   onToggleFavorite,
   onLogout,
   mode,
   onModeChange,
   reports,
   onSelectReport,
+  onUploadFile,
+  onDeleteReport,
   width,
   onWidthChange,
 }: SidebarProps) {
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
+  const [renameTarget, setRenameTarget] = useState<{ id: string; title: string } | null>(null);
+  const [deleteReportTarget, setDeleteReportTarget] = useState<ReportFile | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; report: ReportFile } | null>(null);
   const dragging = useRef(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Close context menu on any click or scroll
+  useEffect(() => {
+    if (!contextMenu) return;
+    const close = () => setContextMenu(null);
+    window.addEventListener("click", close);
+    window.addEventListener("scroll", close, true);
+    return () => {
+      window.removeEventListener("click", close);
+      window.removeEventListener("scroll", close, true);
+    };
+  }, [contextMenu]);
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -119,40 +151,57 @@ export function Sidebar({
       <div
         key={session.id}
         className={cn(
-          "group flex w-full overflow-hidden items-center gap-2 rounded-md px-2 py-1.5 text-sm cursor-pointer",
+          "group flex w-full overflow-hidden items-center gap-1 rounded-md px-2 py-1.5 text-sm cursor-pointer",
           session.id === currentSessionId
             ? "bg-accent text-accent-foreground"
             : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
         )}
         onClick={() => onSelectSession(session.id)}
       >
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onToggleFavorite(session.id, !isFav);
-          }}
-          className={cn(
-            "shrink-0 rounded p-0.5",
-            isFav
-              ? "text-yellow-500"
-              : "text-muted-foreground hover:text-yellow-500"
-          )}
-        >
-          <StarIcon
-            className="h-3.5 w-3.5"
-            fill={isFav ? "currentColor" : "none"}
-          />
-        </button>
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            setDeleteTargetId(session.id);
-          }}
-          className="shrink-0 rounded p-0.5 text-muted-foreground hover:text-destructive"
-        >
-          <Trash2Icon className="h-3.5 w-3.5" />
-        </button>
+        {isFav && (
+          <StarIcon className="h-3 w-3 shrink-0 text-yellow-500" fill="currentColor" />
+        )}
         <span className="min-w-0 flex-1 truncate">{session.title}</span>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              onClick={(e) => e.stopPropagation()}
+              className="shrink-0 rounded p-0.5 opacity-0 group-hover:opacity-100 data-[state=open]:opacity-100 text-muted-foreground hover:text-foreground"
+            >
+              <MoreHorizontalIcon className="h-4 w-4" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" side="right">
+            <DropdownMenuItem
+              onClick={(e) => {
+                e.stopPropagation();
+                setRenameTarget({ id: session.id, title: session.title });
+              }}
+            >
+              <PencilIcon className="h-4 w-4" />
+              Rename
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleFavorite(session.id, !isFav);
+              }}
+            >
+              <StarIcon className="h-4 w-4" fill={isFav ? "currentColor" : "none"} />
+              {isFav ? "Unfavorite" : "Favorite"}
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              variant="destructive"
+              onClick={(e) => {
+                e.stopPropagation();
+                setDeleteTargetId(session.id);
+              }}
+            >
+              <Trash2Icon className="h-4 w-4" />
+              Delete
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     );
   }
@@ -179,9 +228,26 @@ export function Sidebar({
           >
             <FolderOpenIcon className="h-4 w-4" />
           </Button>
-          <Button variant="ghost" size="icon" onClick={onNewChat} className="h-7 w-7">
-            <PlusIcon className="h-4 w-4" />
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={mode === "files" ? () => fileInputRef.current?.click() : onNewChat}
+            className="h-7 w-7"
+            title={mode === "files" ? "Upload file" : "New chat"}
+          >
+            {mode === "files" ? <UploadIcon className="h-4 w-4" /> : <PlusIcon className="h-4 w-4" />}
           </Button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".pdf,.html"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) onUploadFile(file);
+              e.target.value = "";
+            }}
+          />
           <Button variant="ghost" size="icon" onClick={onToggle} className="h-7 w-7">
             <PanelLeftCloseIcon className="h-4 w-4" />
           </Button>
@@ -222,12 +288,19 @@ export function Sidebar({
                   </p>
                 ) : (
                   reports.map((r) => (
-                    <FileTreeFile
+                    <div
                       key={r.path}
-                      path={r.path}
-                      name={r.name}
-                      icon={fileIcon(r.type)}
-                    />
+                      onContextMenu={(e) => {
+                        e.preventDefault();
+                        setContextMenu({ x: e.clientX, y: e.clientY, report: r });
+                      }}
+                    >
+                      <FileTreeFile
+                        path={r.path}
+                        name={r.name}
+                        icon={fileIcon(r.type)}
+                      />
+                    </div>
                   ))
                 )}
               </FileTreeFolder>
@@ -249,6 +322,26 @@ export function Sidebar({
           </Button>
         )}
       </div>
+      {/* Context menu for report files */}
+      {contextMenu && (
+        <div
+          className="fixed z-50 min-w-[140px] rounded-md border bg-popover p-1 shadow-md"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+        >
+          <button
+            className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm text-destructive hover:bg-destructive/10"
+            onClick={() => {
+              setDeleteReportTarget(contextMenu.report);
+              setContextMenu(null);
+            }}
+          >
+            <Trash2Icon className="h-4 w-4" />
+            Delete
+          </button>
+        </div>
+      )}
+
+      {/* Delete chat dialog */}
       <Dialog open={deleteTargetId !== null} onOpenChange={() => setDeleteTargetId(null)}>
         <DialogContent>
           <DialogHeader>
@@ -266,6 +359,70 @@ export function Sidebar({
               onClick={() => {
                 if (deleteTargetId) onDeleteSession(deleteTargetId);
                 setDeleteTargetId(null);
+              }}
+            >
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Rename chat dialog */}
+      <Dialog open={renameTarget !== null} onOpenChange={() => setRenameTarget(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Rename chat</DialogTitle>
+            <DialogDescription>Enter a new name for this chat.</DialogDescription>
+          </DialogHeader>
+          <Input
+            value={renameTarget?.title ?? ""}
+            onChange={(e) =>
+              setRenameTarget((prev) => prev ? { ...prev, title: e.target.value } : null)
+            }
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && renameTarget?.title.trim()) {
+                onRenameSession(renameTarget.id, renameTarget.title.trim());
+                setRenameTarget(null);
+              }
+            }}
+            autoFocus
+          />
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button variant="outline">Cancel</Button>
+            </DialogClose>
+            <Button
+              onClick={() => {
+                if (renameTarget?.title.trim()) {
+                  onRenameSession(renameTarget.id, renameTarget.title.trim());
+                }
+                setRenameTarget(null);
+              }}
+            >
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete report dialog */}
+      <Dialog open={deleteReportTarget !== null} onOpenChange={() => setDeleteReportTarget(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete file?</DialogTitle>
+            <DialogDescription>
+              This will permanently delete <span className="font-medium">{deleteReportTarget?.name}</span>.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button variant="outline">Cancel</Button>
+            </DialogClose>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                if (deleteReportTarget) onDeleteReport(deleteReportTarget);
+                setDeleteReportTarget(null);
               }}
             >
               Delete

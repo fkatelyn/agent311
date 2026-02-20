@@ -19,7 +19,7 @@ from claude_agent_sdk import (
     create_sdk_mcp_server,
     tool,
 )
-from fastapi import Depends, FastAPI, HTTPException, Query, Request
+from fastapi import Depends, FastAPI, HTTPException, Query, Request, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
@@ -175,6 +175,7 @@ async def view_content(args: dict):
 
 
 ALLOWED_REPORT_EXTENSIONS = {".html", ".png", ".csv", ".pdf"}
+ALLOWED_UPLOAD_EXTENSIONS = {".html", ".pdf"}
 
 
 @tool(
@@ -560,6 +561,57 @@ async def download_report(
         media_type=media_type,
         filename=file_path.name,
     )
+
+
+@app.delete("/api/reports/{filename}")
+async def delete_report(
+    filename: str,
+    user: str = Depends(get_current_user),
+):
+    safe_name = Path(filename).name
+    if not safe_name or safe_name != filename or ".." in filename or "/" in filename:
+        raise HTTPException(status_code=400, detail=f"Invalid filename: {filename}")
+
+    file_path = (REPORTS_DIR / safe_name).resolve()
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="File not found")
+
+    if not file_path.is_relative_to(REPORTS_DIR.resolve()):
+        raise HTTPException(status_code=403, detail="File is outside reports directory")
+
+    file_path.unlink()
+    return {"ok": True}
+
+
+@app.post("/api/reports/upload")
+async def upload_report(
+    file: UploadFile = File(...),
+    user: str = Depends(get_current_user),
+):
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="No filename provided")
+
+    safe_name = Path(file.filename).name
+    if not safe_name or safe_name != file.filename or ".." in file.filename or "/" in file.filename:
+        raise HTTPException(status_code=400, detail=f"Invalid filename: {file.filename}")
+
+    ext = Path(safe_name).suffix.lower()
+    if ext not in ALLOWED_UPLOAD_EXTENSIONS:
+        allowed = ", ".join(sorted(ALLOWED_UPLOAD_EXTENSIONS))
+        raise HTTPException(status_code=400, detail=f"Unsupported file type '{ext}'. Allowed: {allowed}")
+
+    file_path = REPORTS_DIR / safe_name
+    content = await file.read()
+    file_path.write_bytes(content)
+
+    stat = file_path.stat()
+    return {
+        "name": safe_name,
+        "path": str(file_path),
+        "type": ext.lstrip("."),
+        "sizeBytes": stat.st_size,
+        "modifiedAt": datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).isoformat(),
+    }
 
 
 # ─── Existing endpoints ─────────────────────────────────────────────────────
