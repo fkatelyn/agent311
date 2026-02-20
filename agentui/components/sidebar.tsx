@@ -151,7 +151,8 @@ export function Sidebar({
       <div
         key={session.id}
         className={cn(
-          "group flex w-full overflow-hidden items-center gap-1 rounded-md px-2 py-1.5 text-sm cursor-pointer",
+          "group grid w-full items-center gap-1 rounded-md px-2 py-1.5 text-sm cursor-pointer",
+          isFav ? "grid-cols-[auto_1fr_auto]" : "grid-cols-[1fr_auto]",
           session.id === currentSessionId
             ? "bg-accent text-accent-foreground"
             : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
@@ -159,14 +160,14 @@ export function Sidebar({
         onClick={() => onSelectSession(session.id)}
       >
         {isFav && (
-          <StarIcon className="h-3 w-3 shrink-0 text-yellow-500" fill="currentColor" />
+          <StarIcon className="h-3 w-3 text-yellow-500" fill="currentColor" />
         )}
-        <span className="min-w-0 flex-1 truncate">{session.title}</span>
+        <span className="truncate">{session.title}</span>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
               onClick={(e) => e.stopPropagation()}
-              className="shrink-0 rounded p-0.5 opacity-0 group-hover:opacity-100 data-[state=open]:opacity-100 text-muted-foreground hover:text-foreground"
+              className="rounded p-0.5 opacity-0 group-hover:opacity-100 data-[state=open]:opacity-100 text-muted-foreground hover:text-foreground"
             >
               <MoreHorizontalIcon className="h-4 w-4" />
             </button>
