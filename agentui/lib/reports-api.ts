@@ -25,3 +25,17 @@ export async function fetchReportContent(
   if (!res.ok) throw new Error(`Failed to fetch report content: ${res.status}`);
   return res.json();
 }
+
+export async function downloadReport(path: string, filename: string) {
+  const res = await authFetch(
+    `${API_URL}/api/reports/download?path=${encodeURIComponent(path)}`
+  );
+  if (!res.ok) throw new Error(`Failed to download report: ${res.status}`);
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}

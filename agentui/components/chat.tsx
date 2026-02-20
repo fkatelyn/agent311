@@ -23,6 +23,7 @@ import {
   type ReportFile,
   fetchReports,
   fetchReportContent,
+  downloadReport,
 } from "@/lib/reports-api";
 
 const VIEW_CONTENT_TOOL_RE = /\[Using tool:\s*view_content\s+([^\]\n]+)\](?:\\n|\n)?/g;
@@ -217,6 +218,14 @@ export function Chat() {
   }, []);
 
   const handleSelectReport = useCallback(async (report: ReportFile) => {
+    if (report.type === "pdf") {
+      try {
+        await downloadReport(report.path, report.name);
+      } catch {
+        // ignore download errors
+      }
+      return;
+    }
     try {
       const data = await fetchReportContent(report.path);
       if (data.encoding === "base64" && report.type === "png") {
