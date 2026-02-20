@@ -1,3 +1,4 @@
+import asyncio
 import base64
 import json
 import logging
@@ -250,12 +251,12 @@ async def _stream_chat(messages: list, session_id: str | None, user_msg_id: str 
             prompt = _extract_text(msg)
             break
 
-    # Build conversation context from earlier messages
+    # Build conversation context from earlier messages, skipping error placeholders
     context = ""
     for msg in messages[:-1]:
         role = msg.get("role", "")
         content = _extract_text(msg)
-        if role and content:
+        if role and content and not content.startswith("Error:"):
             context += f"<{role}>\n{content}\n</{role}>\n\n"
 
     system_prompt = SYSTEM_PROMPT
@@ -283,46 +284,88 @@ async def _stream_chat(messages: list, session_id: str | None, user_msg_id: str 
         ],
         permission_mode="acceptEdits",
         max_turns=60,
+        stderr=lambda line: logger.warning(f"[claude-cli stderr] {line}"),
     )
 
     # SSE stream
     yield f"data: {json.dumps({'type': 'start', 'messageId': msg_id})}\n\n"
     yield f"data: {json.dumps({'type': 'text-start', 'id': msg_id})}\n\n"
 
+    # Queue for events produced by the agent coroutine
+    queue: asyncio.Queue[str | None] = asyncio.Queue()
+
+    async def _run_agent():
+        try:
+            logger.info("[agent] creating ClaudeSDKClient...")
+            async with ClaudeSDKClient(options=options) as client:
+                logger.info("[agent] sending query...")
+                await client.query(prompt)
+                logger.info("[agent] waiting for response...")
+                msg_count = 0
+                async for message in client.receive_response():
+                    msg_count += 1
+                    logger.info(f"[agent] message #{msg_count}: type={type(message).__name__} isinstance_assistant={isinstance(message, AssistantMessage)}")
+                    if hasattr(message, 'content'):
+                        logger.info(f"[agent] message #{msg_count} content types: {[type(b).__name__ for b in message.content]}")
+                    else:
+                        logger.info(f"[agent] message #{msg_count} attrs: {list(vars(message).keys()) if hasattr(message, '__dict__') else repr(message)[:200]}")
+                    if isinstance(message, AssistantMessage):
+                        for block in message.content:
+                            if isinstance(block, TextBlock):
+                                await queue.put(f"data: {json.dumps({'type': 'text-delta', 'id': msg_id, 'delta': block.text})}\n\n")
+                            elif isinstance(block, ToolUseBlock):
+                                if block.name == "mcp__agent311_host__view_content":
+                                    block_input = block.input if isinstance(block.input, dict) else {}
+                                    path_value = block_input.get("path")
+                                    if isinstance(path_value, str) and path_value.strip():
+                                        marker = f"[Using tool: view_content {path_value}]\\n"
+                                        await queue.put(f"data: {json.dumps({'type': 'text-delta', 'id': msg_id, 'delta': marker})}\n\n")
+                                        continue
+                                if block.name == "mcp__agent311_host__save_report":
+                                    block_input = block.input if isinstance(block.input, dict) else {}
+                                    fname = block_input.get("filename", "")
+                                    if isinstance(fname, str) and fname.strip():
+                                        marker = f"[Using tool: save_report {fname}]\\n"
+                                        await queue.put(f"data: {json.dumps({'type': 'text-delta', 'id': msg_id, 'delta': marker})}\n\n")
+                                        continue
+                                tool_marker = f"[Using tool: {block.name}]\\n"
+                                await queue.put(f"data: {json.dumps({'type': 'text-delta', 'id': msg_id, 'delta': tool_marker})}\n\n")
+                logger.info(f"[agent] loop finished. total messages: {msg_count}")
+        except Exception as e:
+            logger.error(f"[agent] exception: {type(e).__name__}: {e}")
+            error_text = f"Error: {str(e)}"
+            await queue.put(f"data: {json.dumps({'type': 'text-delta', 'id': msg_id, 'delta': error_text})}\n\n")
+        finally:
+            logger.info("[agent] done")
+            await queue.put(None)  # sentinel: agent done
+
+    agent_task = asyncio.create_task(_run_agent())
+
     full_text = ""
-    try:
-        async with ClaudeSDKClient(options=options) as client:
-            await client.query(prompt)
-            async for message in client.receive_response():
-                if isinstance(message, AssistantMessage):
-                    for block in message.content:
-                        if isinstance(block, TextBlock):
-                            full_text += block.text
-                            yield f"data: {json.dumps({'type': 'text-delta', 'id': msg_id, 'delta': block.text})}\n\n"
-                        elif isinstance(block, ToolUseBlock):
-                            if block.name == "mcp__agent311_host__view_content":
-                                block_input = block.input if isinstance(block.input, dict) else {}
-                                path_value = block_input.get("path")
-                                if isinstance(path_value, str) and path_value.strip():
-                                    marker = f"[Using tool: view_content {path_value}]\\n"
-                                    full_text += marker
-                                    yield f"data: {json.dumps({'type': 'text-delta', 'id': msg_id, 'delta': marker})}\n\n"
-                                    continue
-                            if block.name == "mcp__agent311_host__save_report":
-                                block_input = block.input if isinstance(block.input, dict) else {}
-                                fname = block_input.get("filename", "")
-                                if isinstance(fname, str) and fname.strip():
-                                    marker = f"[Using tool: save_report {fname}]\\n"
-                                    full_text += marker
-                                    yield f"data: {json.dumps({'type': 'text-delta', 'id': msg_id, 'delta': marker})}\n\n"
-                                    continue
-                            tool_marker = f"[Using tool: {block.name}]\\n"
-                            full_text += tool_marker
-                            yield f"data: {json.dumps({'type': 'text-delta', 'id': msg_id, 'delta': tool_marker})}\n\n"
-    except Exception as e:
-        error_text = f"Error: {str(e)}"
-        full_text += error_text
-        yield f"data: {json.dumps({'type': 'text-delta', 'id': msg_id, 'delta': error_text})}\n\n"
+    KEEPALIVE_INTERVAL = 20  # seconds
+
+    while True:
+        try:
+            item = await asyncio.wait_for(queue.get(), timeout=KEEPALIVE_INTERVAL)
+        except asyncio.TimeoutError:
+            # Send SSE comment to keep the connection alive through Railway's idle timeout
+            yield ": keepalive\n\n"
+            continue
+
+        if item is None:
+            break  # agent finished
+
+        # Accumulate full_text from text-delta events
+        try:
+            parsed = json.loads(item[6:])  # strip "data: "
+            if parsed.get("type") == "text-delta":
+                full_text += parsed.get("delta", "")
+        except Exception:
+            pass
+
+        yield item
+
+    await agent_task  # ensure any exceptions are propagated
 
     yield f"data: {json.dumps({'type': 'text-end', 'id': msg_id})}\n\n"
     yield f"data: {json.dumps({'type': 'finish'})}\n\n"
@@ -687,6 +730,7 @@ async def chat(
         media_type="text/event-stream",
         headers={
             "x-vercel-ai-ui-message-stream": "v1",
-            "Cache-Control": "no-cache",
+            "Cache-Control": "no-cache, no-transform",
+            "X-Accel-Buffering": "no",
         },
     )

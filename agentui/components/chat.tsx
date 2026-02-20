@@ -335,6 +335,7 @@ export function Chat() {
           signal: controller.signal,
         });
 
+        console.log("[chat] fetch response:", res.status, res.headers.get("content-type"));
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
         const reader = res.body?.getReader();
@@ -343,10 +344,13 @@ export function Chat() {
         const decoder = new TextDecoder();
         let buffer = "";
         let fullText = "";
+        let chunkCount = 0;
 
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
+          chunkCount++;
+          if (chunkCount <= 3) console.log(`[chat] chunk #${chunkCount}: ${value?.length} bytes`);
 
           buffer += decoder.decode(value, { stream: true });
           const lines = buffer.split("\n");
@@ -423,7 +427,9 @@ export function Chat() {
         await refreshSessionList();
       } catch (err) {
         if ((err as Error).name !== "AbortError") {
-          const errorText = `Error: ${(err as Error).message}`;
+          const e = err as Error;
+          console.error("[chat] SSE error:", e.name, e.message, e);
+          const errorText = `Error: ${e.message}`;
           setMessages((prev) =>
             prev.map((m) =>
               m.id === assistantId
