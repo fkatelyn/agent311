@@ -40,6 +40,18 @@ export async function uploadReport(file: File): Promise<ReportFile> {
   return res.json();
 }
 
+export async function renameReportApi(oldName: string, newName: string): Promise<void> {
+  const res = await authFetch(
+    `${API_URL}/api/reports/${encodeURIComponent(oldName)}`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: newName }),
+    }
+  );
+  if (!res.ok) throw new Error(`Failed to rename report: ${res.status}`);
+}
+
 export async function deleteReportApi(filename: string): Promise<void> {
   const res = await authFetch(
     `${API_URL}/api/reports/${encodeURIComponent(filename)}`,

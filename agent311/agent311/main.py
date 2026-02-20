@@ -606,6 +606,48 @@ async def download_report(
     )
 
 
+@app.patch("/api/reports/{filename}")
+async def rename_report(
+    filename: str,
+    body: dict,
+    user: str = Depends(get_current_user),
+):
+    new_name = body.get("name", "").strip()
+    if not new_name:
+        raise HTTPException(status_code=400, detail="New name is required")
+
+    # Validate old filename
+    safe_old = Path(filename).name
+    if not safe_old or safe_old != filename or ".." in filename or "/" in filename:
+        raise HTTPException(status_code=400, detail=f"Invalid filename: {filename}")
+
+    # Validate new filename
+    safe_new = Path(new_name).name
+    if not safe_new or safe_new != new_name or ".." in new_name or "/" in new_name:
+        raise HTTPException(status_code=400, detail=f"Invalid new filename: {new_name}")
+
+    # Must keep the same extension
+    old_ext = Path(safe_old).suffix.lower()
+    new_ext = Path(safe_new).suffix.lower()
+    if old_ext != new_ext:
+        raise HTTPException(status_code=400, detail=f"Extension must remain {old_ext}")
+
+    old_path = (REPORTS_DIR / safe_old).resolve()
+    if not old_path.exists():
+        raise HTTPException(status_code=404, detail="File not found")
+    if not old_path.is_relative_to(REPORTS_DIR.resolve()):
+        raise HTTPException(status_code=403, detail="File is outside reports directory")
+
+    new_path = (REPORTS_DIR / safe_new).resolve()
+    if not new_path.is_relative_to(REPORTS_DIR.resolve()):
+        raise HTTPException(status_code=403, detail="New path is outside reports directory")
+    if new_path.exists():
+        raise HTTPException(status_code=409, detail=f"File already exists: {new_name}")
+
+    old_path.rename(new_path)
+    return {"ok": True, "name": safe_new}
+
+
 @app.delete("/api/reports/{filename}")
 async def delete_report(
     filename: str,

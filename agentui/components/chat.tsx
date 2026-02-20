@@ -26,6 +26,7 @@ import {
   downloadReport,
   uploadReport,
   deleteReportApi,
+  renameReportApi,
 } from "@/lib/reports-api";
 import { UploadIcon } from "lucide-react";
 
@@ -282,6 +283,15 @@ export function Chat() {
     }
   }, [activeReport]);
 
+  const handleRenameReport = useCallback(async (report: ReportFile, newName: string) => {
+    try {
+      await renameReportApi(report.name, newName);
+      await refreshReports();
+    } catch {
+      // ignore
+    }
+  }, []);
+
   const handleSubmit = useCallback(
     async (text: string) => {
       if (!text.trim() || !currentSessionId) return;
@@ -529,6 +539,7 @@ export function Chat() {
         onSelectReport={handleSelectReport}
         onUploadFile={handleUploadFile}
         onDeleteReport={handleDeleteReport}
+        onRenameReport={handleRenameReport}
         width={sidebarWidth}
         onWidthChange={setSidebarWidth}
       />
