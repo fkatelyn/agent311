@@ -22,7 +22,7 @@ import {
   CodeBlockActions,
 } from "@/components/ai-elements/code-block";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { DownloadIcon } from "lucide-react";
+import { ArrowLeftIcon, DownloadIcon } from "lucide-react";
 import { API_URL } from "@/lib/config";
 import { authFetch } from "@/lib/auth";
 import type { BundledLanguage } from "shiki";
@@ -106,16 +106,23 @@ export function ArtifactPanel({ code, onClose, reportName, reportPath }: Artifac
   const title = isImage ? "Image Preview" : isHtml ? "HTML Preview" : "JSX Preview";
 
   return (
-    <div className="relative min-w-[320px] border-l" style={{ width: `${width}%` }}>
-      {/* Drag handle */}
+    <div className="relative max-md:!w-full max-md:!min-w-0 md:min-w-[320px] md:border-l" style={{ width: `${width}%` }}>
+      {/* Drag handle - hidden on mobile */}
       <div
         onMouseDown={handleMouseDown}
-        className="absolute -left-1 top-0 z-10 flex h-full w-3 cursor-col-resize items-center justify-center hover:bg-primary/10"
+        className="absolute -left-1 top-0 z-10 hidden h-full w-3 cursor-col-resize items-center justify-center hover:bg-primary/10 md:flex"
       >
         <div className="h-8 w-1 rounded-full bg-muted-foreground/40" />
       </div>
       <Artifact className="flex h-full flex-col rounded-none border-0">
         <ArtifactHeader>
+          <button
+            onClick={onClose}
+            className="mr-2 rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground md:hidden"
+            aria-label="Back to chat"
+          >
+            <ArrowLeftIcon className="h-4 w-4" />
+          </button>
           <ArtifactTitle>{title}</ArtifactTitle>
           <ArtifactActions>
             {reportPath && (

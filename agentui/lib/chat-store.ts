@@ -1,4 +1,5 @@
 import type { ChatMessage } from "@/lib/types";
+import { uuid } from "@/lib/utils";
 
 export interface ChatSession {
   id: string;
@@ -49,7 +50,7 @@ export function deleteSession(id: string) {
 
 export function createSession(): ChatSession {
   return {
-    id: crypto.randomUUID(),
+    id: uuid(),
     title: "New Chat",
     messages: [],
     createdAt: Date.now(),

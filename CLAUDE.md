@@ -11,8 +11,9 @@ agent311 is an Austin 311 Data Science Agent — a full-stack application with a
 - **Backend:** FastAPI + Claude Agent SDK (`claude-agent-sdk`)
 - **Frontend:** shadcn + AI Elements
 - **Database:** PostgreSQL
+- **Data Analysis:** pandas + plotly (charts), kaleido (PNG/PDF export)
 - **Package Manager:** uv (Python), npm (JavaScript)
-- **Deployment:** Railway (Railpack builder)
+- **Deployment:** Railway (Railpack builder, persistent volume for data)
 
 ## Architecture
 
@@ -38,7 +39,8 @@ agent311 is an Austin 311 Data Science Agent — a full-stack application with a
 - Backend uses `agent311/railpack.json`; uv auto-detected via mise from `pyproject.toml` + `uv.lock`
 - Frontend uses `agentui/railpack.json`; Node.js and Next.js auto-detected; `NEXT_PUBLIC_API_URL` set in Railway dashboard
 - Railway auto-detects uv via `agent311/pyproject.toml` + `agent311/uv.lock`
-- Start command: `bash start.sh` (downloads 311 data, starts uvicorn)
+- Start command: `bash start.sh` (downloads 30 days of 311 data, starts uvicorn)
+- Persistent volume (`RAILWAY_VOLUME_MOUNT_PATH`) stores CSV data, reports, and charts across deploys
 
 ## Development Commands
 
@@ -81,10 +83,10 @@ npm run start
 ## Git Workflow
 
 - **Commit directly to `main`** — do not create pull requests
-- **Commit titles** should be clean, concise, and written naturally (avoid robotic phrasing)
-  - Good: "Add chat streaming endpoint"
-  - Bad: "feat: implement chat streaming endpoint with SSE protocol support"
-- **Commit messages** should be simple and human-readable — explain what changed and why, but keep it conversational
+- **Commits use a single-line title only** — no message body, no multi-line descriptions
+- **Commit titles** must be short, clear, and easy to understand at a glance
+  - Good: "Fix UUID crash on mobile Safari"
+  - Bad: "feat: implement crypto.randomUUID fallback for non-secure HTTP contexts on mobile Safari browsers"
 - **Do not add** "Co-Authored-By" or other metadata that makes commits look automated
 - **Do not `git push`** unless the user explicitly asks to push or deploy to Railway. Commits are local-only by default.
 
@@ -93,7 +95,7 @@ npm run start
 - `agent311/pyproject.toml` + `agent311/uv.lock` — Python dependencies
 - `agent311/railpack.json` — Backend Railway build config (system packages, Claude Code CLI install step)
 - `agent311/railway.json` — Specifies Railpack builder
-- `agent311/start.sh` — Startup script (downloads 311 data, starts uvicorn)
+- `agent311/start.sh` — Startup script (downloads 30 days of 311 data, starts uvicorn)
 - `agent311/.python-version` — Pins Python 3.12
 - `agent311/agent311/main.py` — FastAPI app, all endpoints, SSE streaming, MCP tools
 - `agent311/agent311/db.py` — SQLAlchemy async ORM, PostgreSQL config, Session/Message models
@@ -105,6 +107,15 @@ npm run start
 - `agentui/components/artifact-panel.tsx` — Preview panel (iframe for HTML, JSXPreview for JSX)
 - `agentui/lib/session-api.ts` — Backend session CRUD API calls
 - `agentui/lib/auth.ts` — JWT login, token storage, authFetch wrapper
+
+## Data & Persistent Storage
+
+- **Volume mount:** `RAILWAY_VOLUME_MOUNT_PATH` on Railway; falls back to `data/` relative to `agent311/` locally
+- **311 CSV:** `<volume>/311_recent.csv` — past 30 days, downloaded by `start.sh` on startup
+- **Reports:** `<volume>/reports/` — user-curated HTML/CSV/PNG reports, shown in sidebar file tree
+- **Charts:** `<volume>/analysis/charts/` — agent-generated plotly charts, previewed in artifact panel
+- The `data/` directory is gitignored — generated data should never be committed
+- Data source: City of Austin Open Data (Socrata API), dataset ID `xwdj-i9he`
 
 ## Environment Variables
 
@@ -118,6 +129,7 @@ This project uses a `~/.env` file (not checked into git) to store local credenti
 - `DATABASE_URL` — PostgreSQL connection string (provided automatically by Railway Postgres plugin)
 - `JWT_SECRET` — Secret key for JWT signing
 - `ANTHROPIC_API_KEY` — Claude API key
+- `RAILWAY_VOLUME_MOUNT_PATH` — Persistent volume path (provided automatically by Railway volume plugin)
 
 **Frontend env var:**
 - `NEXT_PUBLIC_API_URL` — Backend API URL (set in Railway dashboard; get URL via `railway domain` in the backend service dir)
@@ -131,9 +143,10 @@ The `~/.env` file should never be committed to git.
 - Backend must be run using `python -m uvicorn` (not bare `uvicorn`) to avoid PATH issues on Railway
 - Frontend uses custom SSE parsing, not AI SDK `useChat` hook
 - Backend streams messages using Vercel AI SDK v6 SSE protocol (`start`, `text-start`, `text-delta`, `text-end`, `finish`, `[DONE]`)
-- Tool invocations are emitted as `text-delta` markers: `[Using tool: Read]`, `[Using tool: view_content /tmp/file.html]`
-- `view_content` is a custom MCP tool that lets the agent expose a file for frontend preview
-- File preview is restricted to `/tmp/` only, max 200KB, allowed extensions: `.html`, `.js`, `.jsx`, `.tsx`
+- Tool invocations are emitted as `text-delta` markers: `[Using tool: Read]`, `[Using tool: view_content /path/to/file.html]`
+- Custom MCP tools: `view_content` (preview files), `save_chart` (persist charts), `save_report` (persist reports)
+- `save_chart` saves to `<volume>/analysis/charts/`, `save_report` saves to `<volume>/reports/` — both return the saved path for `view_content`
+- File preview via `view_content` is restricted to `/tmp/` and the volume mount, max 200KB, allowed extensions: `.html`, `.js`, `.jsx`, `.tsx`, `.png`, `.csv`
 - CORS is wide-open (`*`) for development; should be restricted in production
 - Railway backend service Root Directory must be set to `/agent311`
 - Railway containers run as root — use `permission_mode="acceptEdits"` not `"bypassPermissions"`

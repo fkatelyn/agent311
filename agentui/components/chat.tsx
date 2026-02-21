@@ -9,6 +9,7 @@ import { ChatInput } from "@/components/chat-input";
 import { ArtifactPanel } from "@/components/artifact-panel";
 import { API_URL } from "@/lib/config";
 import { isLoggedIn, authFetch, logout } from "@/lib/auth";
+import { cn, uuid } from "@/lib/utils";
 import {
   type ApiSession,
   fetchSessions,
@@ -126,7 +127,7 @@ export function Chat() {
         setMessages(full.messages ?? []);
       } else {
         // Create a new session
-        const id = crypto.randomUUID();
+        const id = uuid();
         await createSessionApi(id, "New Chat");
         const refreshed = await fetchSessions();
         setSessions(refreshed);
@@ -150,7 +151,7 @@ export function Chat() {
   }
 
   const handleNewChat = useCallback(async () => {
-    const id = crypto.randomUUID();
+    const id = uuid();
     try {
       await createSessionApi(id, "New Chat");
       setCurrentSessionId(id);
@@ -297,7 +298,7 @@ export function Chat() {
       if (!text.trim() || !currentSessionId) return;
 
       const userMessage: ChatMessage = {
-        id: crypto.randomUUID(),
+        id: uuid(),
         role: "user",
         content: text,
       };
@@ -315,7 +316,7 @@ export function Chat() {
       }
 
       // Create assistant message placeholder
-      const assistantId = crypto.randomUUID();
+      const assistantId = uuid();
       const assistantMessage: ChatMessage = {
         id: assistantId,
         role: "assistant",
@@ -572,8 +573,8 @@ export function Chat() {
         )}
 
         <div className="flex flex-1 overflow-hidden">
-          {/* Chat area */}
-          <div className="flex flex-1 flex-col overflow-hidden">
+          {/* Chat area - hidden on mobile when artifact panel is open */}
+          <div className={cn("flex flex-1 flex-col overflow-hidden", artifactCode && "hidden md:flex")}>
             <ChatMessages
               messages={messages}
               isStreaming={isStreaming}

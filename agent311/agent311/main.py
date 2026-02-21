@@ -96,9 +96,18 @@ You have a local CSV file at {CSV_PATH} containing the past 30 days of 311 servi
 
 For older data or complex queries, use the Socrata API: https://data.austintexas.gov/resource/xwdj-i9he.csv (or .json). Use $where, $limit, $order, $select, $group parameters.
 
-VISUALIZATIONS: Use pandas + plotly (Python) for all data analysis and charting. Write a Python script, run it, then save the output HTML via save_chart. Always use template='plotly_dark' with paper_bgcolor='#1a1a2e' and plot_bgcolor='#16213e'. Use include_plotlyjs='cdn' in write_html(). save_chart returns the persisted file path — pass that EXACT path to view_content so the user can preview it. NEVER pass /tmp paths to view_content. Filename convention: <descriptive-name>-chart-<YYYY-MM-DD>.html. You can use /tmp for intermediate Python scripts only, but the final chart MUST go through save_chart and view_content MUST use the path returned by save_chart.
+CRITICAL — CHART WORKFLOW (you MUST follow these steps exactly):
+1. Write a Python script to /tmp that uses pandas + plotly to analyze data and generate a chart
+2. The script must call fig.write_html('/tmp/chart_output.html', include_plotlyjs='cdn')
+3. Run the script with Bash
+4. Read the HTML file content from /tmp/chart_output.html
+5. Call save_chart with filename and the HTML content — save_chart returns the persistent path
+6. Call view_content with the EXACT path returned by save_chart (NOT /tmp)
+NEVER call view_content with a /tmp path. NEVER use Write tool for chart files. ALWAYS use save_chart.
+Chart style: template='plotly_dark', paper_bgcolor='#1a1a2e', plot_bgcolor='#16213e'.
+Filename convention: <descriptive-name>-chart-<YYYY-MM-DD>.html
 
-REPORTS: Use pandas + plotly for reports too. Wrap plotly chart divs in HTML with metric cards, tables, and takeaways. Use save_report to save them — reports appear in the user's sidebar file tree. save_report returns the persisted file path — pass that EXACT path to view_content for preview. For PNG export, use fig.write_image() via kaleido.
+REPORTS: Same as charts but use save_report instead. Wrap plotly chart divs in HTML with metric cards, tables, and takeaways. save_report returns the persistent path — pass it to view_content. For PNG export, use fig.write_image() via kaleido.
 
 Be helpful, accurate, and enthusiastic about Austin's civic data!"""
 
@@ -221,7 +230,7 @@ async def save_report(args: dict):
         file_path.write_text(content, encoding="utf-8")
 
     size = file_path.stat().st_size
-    return {"content": [{"type": "text", "text": f"Report saved: {file_path} ({size} bytes)"}]}
+    return {"content": [{"type": "text", "text": f"Report saved ({size} bytes). Pass this path to view_content: {file_path}"}]}
 
 
 ALLOWED_CHART_EXTENSIONS = {".html", ".png"}
@@ -258,7 +267,7 @@ async def save_chart(args: dict):
         file_path.write_text(content, encoding="utf-8")
 
     size = file_path.stat().st_size
-    return {"content": [{"type": "text", "text": f"Chart saved: {file_path} ({size} bytes)"}]}
+    return {"content": [{"type": "text", "text": f"Chart saved ({size} bytes). Pass this path to view_content: {file_path}"}]}
 
 
 agent311_host_tools = create_sdk_mcp_server(
