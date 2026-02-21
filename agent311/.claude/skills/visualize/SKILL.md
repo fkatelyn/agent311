@@ -5,202 +5,124 @@ description: >
   involving counts, comparisons, trends, percentages, rankings, distributions,
   breakdowns, or statistics from 311 data or any CSV/dataset. Do NOT wait for
   the user to ask for a chart. If the answer involves numbers, visualize them.
-  DEFAULT: Generate a Chart.js HTML file and open it in the browser.
+  DEFAULT: Generate a plotly HTML chart and save it with save_chart for persistent
+  storage, then use view_content to preview it in the artifact panel.
   EXCEPTION: If the user says "in text", "ascii", "terminal", or "in the terminal",
   use ASCII text charts instead.
   Trigger phrases include but are not limited to: "how many", "what percentage",
   "compare", "top", "worst", "most common", "trend", "over time", "by district",
   "by zip", "breakdown", "distribution", "average", "which", or any question
   whose answer benefits from a visual representation.
-version: 2.0.0
+version: 3.0.0
 ---
 
 # Visualize Data
 
 Whenever you answer a data-related question, **always include a visualization**. There are two modes:
 
-- **Default → Chart.js HTML** (interactive charts opened in the browser)
+- **Default → Plotly HTML** (saved persistently via `save_chart`, previewed via `view_content`)
 - **Text mode → ASCII** (only when user says "in text", "ascii", "terminal", or "in the terminal")
 
 ---
 
-## MODE 1: Chart.js HTML (Default)
+## MODE 1: Plotly HTML (Default)
 
-Generate a self-contained HTML file in `analysis/charts/` and open it with `open` (macOS).
+Write a Python script using **pandas + plotly** to analyze data and generate an interactive HTML chart. Save it with `save_chart`, preview with `view_content`.
 
 ### Rules
 
 1. **Always visualize.** If your answer includes 3+ data points, generate a chart. No exceptions.
-2. **Self-contained HTML.** Load Chart.js from CDN. No other dependencies.
-3. **Dark theme.** Use dark background (`#1a1a2e`) to match terminal aesthetic.
-4. **Open automatically.** Run `open <file>` after writing so it opens in the browser.
-5. **Multiple charts per page.** If the analysis has several dimensions, put them all in one HTML file with multiple `<canvas>` elements.
-6. **Summarize in your response.** After generating the chart, include a brief text summary of the key findings in your message.
+2. **Pure Python.** Use pandas for data manipulation and plotly for charts. No HTML/JS string templating.
+3. **Dark theme.** Use `template='plotly_dark'` with custom background colors to match the app aesthetic.
+4. **Save with `save_chart`.** ALWAYS use the `save_chart` MCP tool to save the final HTML. Do NOT use `Write` or `Bash` to write chart files. Filename convention: `<descriptive-name>-chart-<YYYY-MM-DD>.html`.
+5. **Preview with `view_content`.** After saving, call `view_content` on the saved path to display it in the artifact panel.
+6. **Multiple charts per page.** Use `make_subplots` for multi-panel dashboards.
+7. **Summarize in your response.** After generating the chart, include a brief text summary of the key findings in your message.
+8. **CDN mode.** Always use `include_plotlyjs='cdn'` in `write_html()` to keep file size small.
 
-### HTML Template
+### Python Template
 
-Every chart HTML file should follow this structure:
+```python
+import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
-```html
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>CHART TITLE</title>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <style>
-    body {
-      background: #1a1a2e;
-      color: #e0e0e0;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-      margin: 0;
-      padding: 24px;
-    }
-    h1 {
-      text-align: center;
-      font-size: 1.5rem;
-      margin-bottom: 8px;
-      color: #fff;
-    }
-    .subtitle {
-      text-align: center;
-      font-size: 0.9rem;
-      color: #888;
-      margin-bottom: 32px;
-    }
-    .chart-container {
-      max-width: 900px;
-      margin: 0 auto 48px auto;
-      background: #16213e;
-      border-radius: 12px;
-      padding: 24px;
-    }
-    .chart-row {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 24px;
-      max-width: 1400px;
-      margin: 0 auto 48px auto;
-    }
-    .chart-row .chart-container {
-      margin: 0;
-    }
-    .insight {
-      max-width: 900px;
-      margin: -32px auto 48px auto;
-      padding: 16px 24px;
-      background: #0f3460;
-      border-radius: 8px;
-      font-size: 0.95rem;
-      line-height: 1.5;
-      color: #ccc;
-    }
-    .takeaways {
-      max-width: 900px;
-      margin: 48px auto;
-      padding: 24px;
-      background: #0f3460;
-      border: 1px solid #1a5276;
-      border-radius: 12px;
-    }
-    .takeaways h2 {
-      margin-top: 0;
-      color: #00d2ff;
-    }
-    .takeaways li {
-      margin-bottom: 8px;
-      line-height: 1.5;
-    }
-  </style>
-</head>
-<body>
-  <h1>CHART TITLE</h1>
-  <p class="subtitle">Data source · date range · record count</p>
+# Read data
+df = pd.read_csv("<CSV_PATH>")
 
-  <div class="chart-container">
-    <canvas id="chart1"></canvas>
-  </div>
+# Filter / aggregate
+filtered = df[df['sr_type_desc'].str.contains('Pothole', case=False, na=False)]
+daily = filtered.groupby(filtered['sr_created_date'].str[:10]).size().reset_index(name='count')
 
-  <!-- For side-by-side charts use chart-row -->
-  <div class="chart-row">
-    <div class="chart-container"><canvas id="chart2"></canvas></div>
-    <div class="chart-container"><canvas id="chart3"></canvas></div>
-  </div>
+# Build figure
+fig = make_subplots(
+    rows=1, cols=2,
+    subplot_titles=('Daily Trend', 'Status Breakdown'),
+    specs=[[{'type': 'xy'}, {'type': 'domain'}]]
+)
 
-  <div class="takeaways">
-    <h2>Key Takeaways</h2>
-    <ul>
-      <li>First finding</li>
-      <li>Second finding</li>
-    </ul>
-  </div>
+fig.add_trace(go.Bar(x=daily.iloc[:, 0], y=daily['count'],
+    marker_color='#00d2ff'), row=1, col=1)
 
-  <script>
-    // Chart.js defaults for dark theme
-    Chart.defaults.color = '#a0a0a0';
-    Chart.defaults.borderColor = '#333355';
+status = filtered['sr_status_desc'].value_counts()
+fig.add_trace(go.Pie(labels=status.index, values=status.values,
+    hole=0.4, marker=dict(colors=COLORS)), row=1, col=2)
 
-    // CHART 1
-    new Chart(document.getElementById('chart1'), {
-      type: 'bar', // or 'line', 'doughnut', 'pie', 'polarArea'
-      data: {
-        labels: ['Label 1', 'Label 2'],
-        datasets: [{
-          label: 'Dataset',
-          data: [100, 200],
-          backgroundColor: ['#00d2ff', '#7b2ff7', '#ff6b6b', '#ffd93d', '#6bcb77'],
-        }]
-      },
-      options: {
-        responsive: true,
-        plugins: {
-          legend: { display: false },
-          title: { display: true, text: 'Chart Title', font: { size: 16 } }
-        }
-      }
-    });
-  </script>
-</body>
-</html>
+# Apply dark theme
+fig.update_layout(
+    template='plotly_dark',
+    paper_bgcolor='#1a1a2e',
+    plot_bgcolor='#16213e',
+    font=dict(color='#e0e0e0'),
+    title=dict(text='Chart Title', font=dict(size=20, color='white')),
+    showlegend=False,
+    height=500,
+    margin=dict(t=80, b=40, l=60, r=40),
+)
+
+# Save to /tmp (intermediate), then save_chart will persist it
+fig.write_html('/tmp/chart_output.html', include_plotlyjs='cdn')
 ```
 
-### Choosing Chart.js Chart Types
+### Choosing Plotly Chart Types
 
-| Data Shape | Chart.js Type | Notes |
+| Data Shape | Plotly Type | Notes |
 |---|---|---|
-| Ranked categories | `bar` (horizontal: `indexAxis: 'y'`) | Use for top-N lists |
-| Values over time | `line` with `fill: true` | Area chart for trends |
-| Proportions / shares | `doughnut` or `pie` | Use doughnut for status breakdowns |
-| Numeric distributions | `bar` | Histogram-style with range labels |
-| 24-hour / weekly cycle | `line` or `bar` | Use `bar` for discrete, `line` for continuous |
-| Comparing 2 groups | `bar` with grouped datasets | Side-by-side bars |
-| Geographic (district/zip) | `bar` (horizontal) | Sorted by value descending |
+| Ranked categories | `go.Bar` with `orientation='h'` | Use for top-N lists |
+| Values over time | `go.Scatter` with `fill='tozeroy'` | Area chart for trends |
+| Proportions / shares | `go.Pie` with `hole=0.4` | Donut for status breakdowns |
+| Numeric distributions | `go.Histogram` | Automatic binning |
+| 24-hour / weekly cycle | `go.Bar` or `go.Scatter` | Bar for discrete, line for continuous |
+| Comparing 2 groups | `go.Bar` with grouped `barmode='group'` | Side-by-side bars |
+| Geographic (district/zip) | `go.Bar` with `orientation='h'` | Sorted by value descending |
 
 ### Color Palette
 
 Use these colors consistently:
-```javascript
-const COLORS = [
-  '#00d2ff', // cyan
-  '#7b2ff7', // purple
-  '#ff6b6b', // red/coral
-  '#ffd93d', // yellow
-  '#6bcb77', // green
-  '#4d96ff', // blue
-  '#ff922b', // orange
-  '#845ef7', // violet
-  '#20c997', // teal
-  '#f06595', // pink
-];
+```python
+COLORS = [
+    '#00d2ff',  # cyan
+    '#7b2ff7',  # purple
+    '#ff6b6b',  # red/coral
+    '#ffd93d',  # yellow
+    '#6bcb77',  # green
+    '#4d96ff',  # blue
+    '#ff922b',  # orange
+    '#845ef7',  # violet
+    '#20c997',  # teal
+    '#f06595',  # pink
+]
 ```
 
 ### Workflow
 
-1. Compute the data using `uv run python3` (read CSV, aggregate, etc.)
-2. Write the HTML file to `analysis/charts/<descriptive-name>.html`
-3. Run `open analysis/charts/<descriptive-name>.html` to open in browser
-4. In your response text, summarize the key findings (no ASCII chart needed)
+1. Write a Python script using pandas + plotly to read CSV, aggregate, and build the chart
+2. Run the script with `uv run python3 /tmp/chart_script.py` (write script to /tmp first)
+3. The script saves HTML to `/tmp/<name>.html` via `fig.write_html(..., include_plotlyjs='cdn')`
+4. Read the HTML file content back, then call `save_chart(filename="<name>-chart-<YYYY-MM-DD>.html", content=<html_string>, encoding="text")` to persist it
+5. Call `view_content(path=<saved_path>)` to display the chart in the artifact panel
+6. In your response text, summarize the key findings
 
 ---
 

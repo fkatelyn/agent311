@@ -3,7 +3,8 @@ set -e
 
 # Download past 7 days of Austin 311 data on startup
 SEVEN_DAYS_AGO=$(date -u -d "7 days ago" +%Y-%m-%dT00:00:00 2>/dev/null || date -u -v-7d +%Y-%m-%dT00:00:00)
-DATA_DIR="${RAILWAY_VOLUME_MOUNT_PATH:-/tmp/agent311_data}"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+DATA_DIR="${RAILWAY_VOLUME_MOUNT_PATH:-$SCRIPT_DIR/data}"
 mkdir -p "$DATA_DIR"
 
 if [ ! -f "$DATA_DIR/311_recent.csv" ]; then

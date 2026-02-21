@@ -42,8 +42,12 @@ from agent311.db import (
 )
 
 
-_volume_mount = os.environ.get("RAILWAY_VOLUME_MOUNT_PATH", "/tmp/agent311_data")
+_volume_mount = os.environ.get(
+    "RAILWAY_VOLUME_MOUNT_PATH",
+    str(Path(__file__).resolve().parent.parent / "data"),
+)
 REPORTS_DIR = Path(_volume_mount) / "reports"
+CHARTS_DIR = Path(_volume_mount) / "analysis" / "charts"
 
 
 @asynccontextmanager
@@ -52,6 +56,8 @@ async def lifespan(app: FastAPI):
     logger.info("Database tables created")
     REPORTS_DIR.mkdir(parents=True, exist_ok=True)
     logger.info(f"Reports directory ready: {REPORTS_DIR}")
+    CHARTS_DIR.mkdir(parents=True, exist_ok=True)
+    logger.info(f"Charts directory ready: {CHARTS_DIR}")
     yield
 
 
@@ -89,6 +95,10 @@ You can discuss:
 You have a local CSV file at {CSV_PATH} containing the past 7 days of 311 service requests, downloaded fresh on startup. Use the Read tool to access this file when users ask about recent 311 data. The CSV columns are: sr_number, sr_type_desc, sr_department_desc, sr_method_received_desc, sr_status_desc, sr_status_date, sr_created_date, sr_updated_date, sr_closed_date, sr_location, sr_location_street_number, sr_location_street_name, sr_location_city, sr_location_zip_code, sr_location_county, sr_location_x, sr_location_y, sr_location_lat, sr_location_long, sr_location_lat_long, sr_location_council_district, sr_location_map_page, sr_location_map_tile.
 
 For older data or complex queries, use the Socrata API: https://data.austintexas.gov/resource/xwdj-i9he.csv (or .json). Use $where, $limit, $order, $select, $group parameters.
+
+VISUALIZATIONS: Use pandas + plotly (Python) for all data analysis and charting. Write a Python script, run it, then save the output HTML via save_chart. Always use template='plotly_dark' with paper_bgcolor='#1a1a2e' and plot_bgcolor='#16213e'. Use include_plotlyjs='cdn' in write_html(). After saving, call view_content on the saved path so the user can preview it. Filename convention: <descriptive-name>-chart-<YYYY-MM-DD>.html. You can use /tmp for intermediate scripts and files, but the final chart MUST go through save_chart.
+
+REPORTS: Use pandas + plotly for reports too. Wrap plotly chart divs in HTML with metric cards, tables, and takeaways. Use save_report to save them — reports appear in the user's sidebar file tree. For PNG export, use fig.write_image() via kaleido.
 
 Be helpful, accurate, and enthusiastic about Austin's civic data!"""
 
@@ -214,9 +224,46 @@ async def save_report(args: dict):
     return {"content": [{"type": "text", "text": f"Report saved: {file_path} ({size} bytes)"}]}
 
 
+ALLOWED_CHART_EXTENSIONS = {".html", ".png"}
+
+
+@tool(
+    "save_chart",
+    "Save an agent-generated chart or visualization (HTML or PNG) to the persistent charts directory. Returns the saved file path for use with view_content.",
+    {"filename": str, "content": str, "encoding": str},
+)
+async def save_chart(args: dict):
+    filename = str(args.get("filename", "")).strip()
+    content = str(args.get("content", ""))
+    encoding = str(args.get("encoding", "text")).strip().lower()
+
+    if not filename:
+        return {"content": [{"type": "text", "text": "Error: filename is required."}]}
+
+    safe_name = Path(filename).name
+    if not safe_name or safe_name != filename or ".." in filename or "/" in filename:
+        return {"content": [{"type": "text", "text": f"Error: invalid filename '{filename}'. Use a simple name like 'chart.html'."}]}
+
+    ext = Path(safe_name).suffix.lower()
+    if ext not in ALLOWED_CHART_EXTENSIONS:
+        allowed = ", ".join(sorted(ALLOWED_CHART_EXTENSIONS))
+        return {"content": [{"type": "text", "text": f"Error: unsupported extension '{ext}'. Allowed: {allowed}"}]}
+
+    file_path = CHARTS_DIR / safe_name
+
+    if encoding == "base64":
+        data = base64.b64decode(content)
+        file_path.write_bytes(data)
+    else:
+        file_path.write_text(content, encoding="utf-8")
+
+    size = file_path.stat().st_size
+    return {"content": [{"type": "text", "text": f"Chart saved: {file_path} ({size} bytes)"}]}
+
+
 agent311_host_tools = create_sdk_mcp_server(
     name="agent311_host",
-    tools=[view_content, save_report],
+    tools=[view_content, save_report, save_chart],
 )
 
 
@@ -281,6 +328,7 @@ async def _stream_chat(messages: list, session_id: str | None, user_msg_id: str 
             "WebFetch",
             "mcp__agent311_host__view_content",
             "mcp__agent311_host__save_report",
+            "mcp__agent311_host__save_chart",
         ],
         permission_mode="acceptEdits",
         max_turns=60,

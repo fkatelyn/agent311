@@ -43,6 +43,9 @@ npm-debug.log*
 # SQLite
 *.db
 
+# Agent data (reports, charts, CSV downloads)
+data/
+
 # Testing
 .coverage
 htmlcov/
