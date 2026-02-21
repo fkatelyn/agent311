@@ -40,6 +40,9 @@ Thumbs.db
 *.log
 npm-debug.log*
 
+# SQLite
+*.db
+
 # Testing
 .coverage
 htmlcov/
