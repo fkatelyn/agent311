@@ -92,7 +92,7 @@ You can discuss:
 - Data trends and statistics
 - How to access the public dataset via Socrata API
 
-You have a local CSV file at {CSV_PATH} containing the past 7 days of 311 service requests, downloaded fresh on startup. Use the Read tool to access this file when users ask about recent 311 data. The CSV columns are: sr_number, sr_type_desc, sr_department_desc, sr_method_received_desc, sr_status_desc, sr_status_date, sr_created_date, sr_updated_date, sr_closed_date, sr_location, sr_location_street_number, sr_location_street_name, sr_location_city, sr_location_zip_code, sr_location_county, sr_location_x, sr_location_y, sr_location_lat, sr_location_long, sr_location_lat_long, sr_location_council_district, sr_location_map_page, sr_location_map_tile.
+You have a local CSV file at {CSV_PATH} containing the past 30 days of 311 service requests, downloaded fresh on startup. Use the Read tool to access this file when users ask about recent 311 data. The CSV columns are: sr_number, sr_type_desc, sr_department_desc, sr_method_received_desc, sr_status_desc, sr_status_date, sr_created_date, sr_updated_date, sr_closed_date, sr_location, sr_location_street_number, sr_location_street_name, sr_location_city, sr_location_zip_code, sr_location_county, sr_location_x, sr_location_y, sr_location_lat, sr_location_long, sr_location_lat_long, sr_location_council_district, sr_location_map_page, sr_location_map_tile.
 
 For older data or complex queries, use the Socrata API: https://data.austintexas.gov/resource/xwdj-i9he.csv (or .json). Use $where, $limit, $order, $select, $group parameters.
 

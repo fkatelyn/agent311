@@ -25,7 +25,7 @@ Download City of Austin 311 service request data from the Socrata Open Data API.
 
 Ask the user what date range they want if not specified. Common options:
 - Past 7 days
-- Past 1 month (default)
+- Past 30 days (default)
 - Past 3 months
 - Past 1 year
 - Custom date range
