@@ -5,7 +5,7 @@ description: >
   "fetch Austin 311", "update 311 data", "refresh 311 data",
   "download service requests", or discusses downloading or updating
   City of Austin 311 service request data.
-version: 1.0.0
+version: 1.1.0
 ---
 
 # Download Austin 311 Data
@@ -32,32 +32,44 @@ Ask the user what date range they want if not specified. Common options:
 
 Calculate the start date based on today's date.
 
-### 2. Download the Data
+### 2. Determine the Data Directory
 
-Create the `data/` directory if it doesn't exist, then fetch via curl:
+The data directory uses the Railway persistent volume when deployed, with a local fallback:
 
 ```bash
-mkdir -p data
+DATA_DIR="${RAILWAY_VOLUME_MOUNT_PATH:-$(cd "$(dirname "$(find . -name pyproject.toml -maxdepth 1)")" && pwd)/data}"
+mkdir -p "$DATA_DIR"
+```
+
+In practice:
+- **Railway:** `$RAILWAY_VOLUME_MOUNT_PATH` (persistent across deploys)
+- **Local:** `data/` relative to the `agent311/` directory (next to `pyproject.toml`)
+
+### 3. Download the Data
+
+Fetch via curl into the data directory:
+
+```bash
 curl -s "https://data.austintexas.gov/resource/xwdj-i9he.csv?\$where=sr_created_date>='<START_DATE>T00:00:00'&\$limit=50000&\$offset=0" \
-  -o data/austin_311_data.csv
+  -o "$DATA_DIR/311_recent.csv"
 ```
 
 **Pagination:** The Socrata API returns max 50,000 rows per request. If the dataset may exceed this:
 1. First check the count: `$select=count(*)&$where=sr_created_date>='<START_DATE>T00:00:00'`
 2. If count > 50,000, paginate using `$offset` in increments of 50,000 and concatenate results
 
-### 3. Verify the Download
+### 4. Verify the Download
 
 After downloading, verify by running:
 ```bash
-wc -l data/austin_311_data.csv
-head -2 data/austin_311_data.csv
+wc -l "$DATA_DIR/311_recent.csv"
+head -2 "$DATA_DIR/311_recent.csv"
 ```
 
 Report to the user:
 - Number of records downloaded
 - Date range covered
-- File location (`data/austin_311_data.csv`)
+- File location
 
 ## Dataset Columns
 
@@ -112,4 +124,4 @@ Pass any user-specified filters into the `$where` clause.
 
 ## Output
 
-Save to `data/austin_311_data.csv` by default. If the user specifies a custom filename, use that instead.
+Save to `$DATA_DIR/311_recent.csv` by default (matching what `start.sh` downloads on startup). This ensures the deployed agent's system prompt `CSV_PATH` always points to the freshest data. If the user specifies a custom filename, save alongside it in `$DATA_DIR/`.
