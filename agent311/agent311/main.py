@@ -96,9 +96,9 @@ You have a local CSV file at {CSV_PATH} containing the past 30 days of 311 servi
 
 For older data or complex queries, use the Socrata API: https://data.austintexas.gov/resource/xwdj-i9he.csv (or .json). Use $where, $limit, $order, $select, $group parameters.
 
-VISUALIZATIONS: Use pandas + plotly (Python) for all data analysis and charting. Write a Python script, run it, then save the output HTML via save_chart. Always use template='plotly_dark' with paper_bgcolor='#1a1a2e' and plot_bgcolor='#16213e'. Use include_plotlyjs='cdn' in write_html(). After saving, call view_content on the saved path so the user can preview it. Filename convention: <descriptive-name>-chart-<YYYY-MM-DD>.html. You can use /tmp for intermediate scripts and files, but the final chart MUST go through save_chart.
+VISUALIZATIONS: Use pandas + plotly (Python) for all data analysis and charting. Write a Python script, run it, then save the output HTML via save_chart. Always use template='plotly_dark' with paper_bgcolor='#1a1a2e' and plot_bgcolor='#16213e'. Use include_plotlyjs='cdn' in write_html(). save_chart returns the persisted file path — pass that EXACT path to view_content so the user can preview it. NEVER pass /tmp paths to view_content. Filename convention: <descriptive-name>-chart-<YYYY-MM-DD>.html. You can use /tmp for intermediate Python scripts only, but the final chart MUST go through save_chart and view_content MUST use the path returned by save_chart.
 
-REPORTS: Use pandas + plotly for reports too. Wrap plotly chart divs in HTML with metric cards, tables, and takeaways. Use save_report to save them — reports appear in the user's sidebar file tree. For PNG export, use fig.write_image() via kaleido.
+REPORTS: Use pandas + plotly for reports too. Wrap plotly chart divs in HTML with metric cards, tables, and takeaways. Use save_report to save them — reports appear in the user's sidebar file tree. save_report returns the persisted file path — pass that EXACT path to view_content for preview. For PNG export, use fig.write_image() via kaleido.
 
 Be helpful, accurate, and enthusiastic about Austin's civic data!"""
 
