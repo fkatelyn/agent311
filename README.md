@@ -1,6 +1,6 @@
 # Agent Austin
 
-An AI agent for exploring Austin 311 service request data. Ask questions in plain English, get charts, summaries, and insights about city services in Austin.
+An AI-powered data science agent for Austin 311 service request data. Powered by Claude, Anthropic's LLM, it analyzes, visualizes, and summarizes city service data — just ask in plain English.
 
 ## What You Can Do
 
@@ -44,7 +44,6 @@ Talk to the agent like you're chatting with a data analyst. Here are some things
 ```bash
 cd agent311
 export ANTHROPIC_API_KEY=sk-ant-...
-export DATABASE_URL=postgresql://...
 export JWT_SECRET=your-secret-key
 uv run uvicorn agent311.main:app --reload --host 0.0.0.0 --port 8000
 ```
@@ -57,7 +56,7 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:3000 and log in with `default@agentaustin.org` / `password`.
+Open http://localhost:3000.
 
 ## What is Austin 311?
 
@@ -71,9 +70,9 @@ Austin 311 is the City of Austin's non-emergency service request system. Residen
 
 - **[Architecture](docs/architecture.md)** — Stack, project structure, API endpoints, dataset schema
 - **[Frontend Guide](docs/agentui-frontend.md)** — Component breakdown, SSE parsing, artifact preview
-- **[Claude Agent SDK Guide](docs/agent-sdk-guide.md)** — SDK integration, skills, custom MCP tools
+- **[Backend Guide](docs/agent-sdk-guide.md)** — SDK integration, skills, custom MCP tools
 - **[Railway Deployment Guide](docs/railway-deployment-guide.md)** — Full deployment instructions
 
 ## License
 
-MIT
+GPL-3.0
