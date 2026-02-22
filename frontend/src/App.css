@@ -8,11 +8,80 @@
   padding: 1rem;
 }
 
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.header h1 {
+  margin: 0;
+}
+
+.logout-btn {
+  position: absolute;
+  right: 0;
+  padding: 0.4rem 0.8rem;
+  background: transparent;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  cursor: pointer;
+  color: #666;
+}
+
+.logout-btn:hover {
+  background: #f0f0f0;
+}
+
 h1 {
   text-align: center;
   font-size: 1.5rem;
   margin-bottom: 1rem;
   flex-shrink: 0;
+}
+
+.login-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+}
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  width: 100%;
+  max-width: 320px;
+}
+
+.login-form input {
+  padding: 0.75rem;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  font-size: 1rem;
+  outline: none;
+}
+
+.login-form input:focus {
+  border-color: #007aff;
+}
+
+.login-form button {
+  padding: 0.75rem;
+  background: #007aff;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.login-form button:hover {
+  background: #0066dd;
 }
 
 .messages {

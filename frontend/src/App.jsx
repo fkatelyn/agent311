@@ -4,6 +4,8 @@ import "./App.css";
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 function App() {
+  const [token, setToken] = useState(() => localStorage.getItem("auth_token"));
+  const [loginError, setLoginError] = useState("");
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
@@ -12,6 +14,37 @@ function App() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  async function handleLogin(e) {
+    e.preventDefault();
+    setLoginError("");
+    const form = new FormData(e.target);
+    try {
+      const res = await fetch(`${API_URL}/api/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: form.get("email"),
+          password: form.get("password"),
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || `Login failed (${res.status})`);
+      }
+      const data = await res.json();
+      localStorage.setItem("auth_token", data.token);
+      setToken(data.token);
+    } catch (err) {
+      setLoginError(err.message);
+    }
+  }
+
+  function handleLogout() {
+    localStorage.removeItem("auth_token");
+    setToken(null);
+    setMessages([]);
+  }
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -29,11 +62,24 @@ function App() {
     try {
       const res = await fetch(`${API_URL}/api/chat`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify({
           messages: allMessages.map((m) => ({ role: m.role, content: m.text })),
         }),
       });
+
+      if (!res.ok) {
+        if (res.status === 401) {
+          localStorage.removeItem("auth_token");
+          setToken(null);
+          throw new Error("Session expired. Please log in again.");
+        }
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || `Request failed (${res.status})`);
+      }
 
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
@@ -79,9 +125,28 @@ function App() {
     setStreaming(false);
   }
 
+  if (!token) {
+    return (
+      <div className="app">
+        <h1>Agent 311</h1>
+        <div className="login-container">
+          <form onSubmit={handleLogin} className="login-form">
+            <input name="email" type="email" placeholder="Email" defaultValue="default@agentaustin.org" required />
+            <input name="password" type="password" placeholder="Password" defaultValue="password" required />
+            {loginError && <div className="error">{loginError}</div>}
+            <button type="submit">Log In</button>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="app">
-      <h1>Agent 311</h1>
+      <div className="header">
+        <h1>Agent 311</h1>
+        <button className="logout-btn" onClick={handleLogout}>Log Out</button>
+      </div>
 
       <div className="messages">
         {messages.length === 0 && (
