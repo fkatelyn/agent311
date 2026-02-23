@@ -296,9 +296,18 @@ export function Sidebar({
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="start" side="right">
                           <DropdownMenuItem
-                            onClick={(e) => {
+                            onClick={async (e) => {
                               e.stopPropagation();
-                              onSelectReport(r);
+                              try {
+                                const res = await authFetch(
+                                  `${API_URL}/api/reports/download?path=${encodeURIComponent(r.path)}&inline=true`
+                                );
+                                const blob = await res.blob();
+                                const url = URL.createObjectURL(blob);
+                                window.open(url, "_blank");
+                              } catch {
+                                // ignore
+                              }
                             }}
                           >
                             <ExternalLinkIcon className="h-4 w-4" />

@@ -22,7 +22,7 @@ from claude_agent_sdk import (
 )
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, Response, StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -638,6 +638,7 @@ DOWNLOAD_MEDIA_TYPES = {
 @app.get("/api/reports/download")
 async def download_report(
     path: str = Query(..., description="Absolute path to report file"),
+    inline: bool = Query(False, description="Serve inline instead of as attachment"),
     user: str = Depends(get_current_user),
 ):
     try:
@@ -656,6 +657,13 @@ async def download_report(
         raise HTTPException(status_code=400, detail=f"Unsupported file type: {ext}")
 
     media_type = DOWNLOAD_MEDIA_TYPES.get(ext, "application/octet-stream")
+    if inline:
+        content = file_path.read_bytes()
+        return Response(
+            content=content,
+            media_type=media_type,
+            headers={"Content-Disposition": f'inline; filename="{file_path.name}"'},
+        )
     return FileResponse(
         path=str(file_path),
         media_type=media_type,
