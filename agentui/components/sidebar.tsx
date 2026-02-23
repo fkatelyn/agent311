@@ -32,6 +32,8 @@ import {
   UploadIcon,
   MoreHorizontalIcon,
   PencilIcon,
+  ExternalLinkIcon,
+  DownloadIcon,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -41,6 +43,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { API_URL } from "@/lib/config";
+import { authFetch } from "@/lib/auth";
 
 export type SidebarMode = "chats" | "files";
 
@@ -291,6 +295,37 @@ export function Sidebar({
                           </button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="start" side="right">
+                          <DropdownMenuItem
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onSelectReport(r);
+                            }}
+                          >
+                            <ExternalLinkIcon className="h-4 w-4" />
+                            Open
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              try {
+                                const res = await authFetch(
+                                  `${API_URL}/api/reports/download?path=${encodeURIComponent(r.path)}`
+                                );
+                                const blob = await res.blob();
+                                const url = URL.createObjectURL(blob);
+                                const a = document.createElement("a");
+                                a.href = url;
+                                a.download = r.name;
+                                a.click();
+                                URL.revokeObjectURL(url);
+                              } catch {
+                                // ignore download errors
+                              }
+                            }}
+                          >
+                            <DownloadIcon className="h-4 w-4" />
+                            Download
+                          </DropdownMenuItem>
                           <DropdownMenuItem
                             onClick={(e) => {
                               e.stopPropagation();
