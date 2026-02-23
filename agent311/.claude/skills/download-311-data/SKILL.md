@@ -24,10 +24,10 @@ Download City of Austin 311 service request data from the Socrata Open Data API.
 ### 1. Determine Date Range
 
 Ask the user what date range they want if not specified. Common options:
+- Year to date (default)
 - Past 7 days
-- Past 30 days (default)
+- Past 30 days
 - Past 3 months
-- Past 1 year
 - Custom date range
 
 Calculate the start date based on today's date.
@@ -50,13 +50,13 @@ In practice:
 Fetch via curl into the data directory:
 
 ```bash
-curl -s "https://data.austintexas.gov/resource/xwdj-i9he.csv?\$where=sr_created_date>='<START_DATE>T00:00:00'&\$limit=50000&\$offset=0" \
+curl -s "https://data.austintexas.gov/resource/xwdj-i9he.csv?\$where=sr_created_date>='<START_DATE>T00:00:00'&\$limit=100000&\$offset=0" \
   -o "$DATA_DIR/311_recent.csv"
 ```
 
-**Pagination:** The Socrata API returns max 50,000 rows per request. If the dataset may exceed this:
+**Pagination:** The Socrata API returns max 100,000 rows per request. If the dataset may exceed this:
 1. First check the count: `$select=count(*)&$where=sr_created_date>='<START_DATE>T00:00:00'`
-2. If count > 50,000, paginate using `$offset` in increments of 50,000 and concatenate results
+2. If count > 100,000, paginate using `$offset` in increments of 100,000 and concatenate results
 
 ### 4. Verify the Download
 

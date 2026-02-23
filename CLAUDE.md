@@ -39,7 +39,7 @@ agent311 is an Austin 311 Data Science Agent — a full-stack application with a
 - Backend uses `agent311/railpack.json`; uv auto-detected via mise from `pyproject.toml` + `uv.lock`
 - Frontend uses `agentui/railpack.json`; Node.js and Next.js auto-detected; `NEXT_PUBLIC_API_URL` set in Railway dashboard
 - Railway auto-detects uv via `agent311/pyproject.toml` + `agent311/uv.lock`
-- Start command: `bash start.sh` (downloads 30 days of 311 data, starts uvicorn)
+- Start command: `bash start.sh` (downloads year-to-date 311 data, starts uvicorn)
 - Persistent volume (`RAILWAY_VOLUME_MOUNT_PATH`) stores CSV data, reports, and charts across deploys
 
 ## Development Commands
@@ -95,7 +95,7 @@ npm run start
 - `agent311/pyproject.toml` + `agent311/uv.lock` — Python dependencies
 - `agent311/railpack.json` — Backend Railway build config (system packages, Claude Code CLI install step)
 - `agent311/railway.json` — Specifies Railpack builder
-- `agent311/start.sh` — Startup script (downloads 30 days of 311 data, starts uvicorn)
+- `agent311/start.sh` — Startup script (downloads year-to-date 311 data, starts uvicorn)
 - `agent311/.python-version` — Pins Python 3.12
 - `agent311/agent311/main.py` — FastAPI app, all endpoints, SSE streaming, MCP tools
 - `agent311/agent311/db.py` — SQLAlchemy async ORM, PostgreSQL config, Session/Message models
@@ -111,7 +111,7 @@ npm run start
 ## Data & Persistent Storage
 
 - **Volume mount:** `RAILWAY_VOLUME_MOUNT_PATH` on Railway; falls back to `data/` relative to `agent311/` locally
-- **311 CSV:** `<volume>/311_recent.csv` — past 30 days, downloaded by `start.sh` on startup
+- **311 CSV:** `<volume>/311_recent.csv` — year-to-date, downloaded by `start.sh` on startup
 - **Reports:** `<volume>/reports/` — user-curated HTML/CSV/PNG reports, shown in sidebar file tree
 - **Charts:** `<volume>/analysis/charts/` — agent-generated plotly charts, previewed in artifact panel
 - The `data/` directory is gitignored — generated data should never be committed
