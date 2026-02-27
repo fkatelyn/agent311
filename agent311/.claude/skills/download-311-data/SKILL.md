@@ -21,16 +21,9 @@ Download City of Austin 311 service request data from the Socrata Open Data API.
 
 ## Steps
 
-### 1. Determine Date Range
+### 1. Date Range
 
-Ask the user what date range they want if not specified. Common options:
-- Year to date (default)
-- Past 7 days
-- Past 30 days
-- Past 3 months
-- Custom date range
-
-Calculate the start date based on today's date.
+Default: January 1 of last year to present. This matches what `start.sh` downloads on startup.
 
 ### 2. Determine the Data Directory
 
@@ -122,6 +115,20 @@ $where=sr_created_date>='2026-01-01' AND sr_department_desc='Austin Resource Rec
 
 Pass any user-specified filters into the `$where` clause.
 
+## Update / Delta Merge
+
+When updating an existing `311_recent.csv` (e.g., "refresh 311 data", "update 311 data"), use the `download_311.py` module which handles incremental updates automatically:
+
+```bash
+cd agent311 && uv run python -m agent311.download_311
+```
+
+This script:
+1. If `311_recent.csv` doesn't exist → full paginated download from Jan 1 of last year
+2. If `311_recent.csv` exists → reads the latest `sr_created_date`, fetches only newer rows, merges with deduplication by `sr_number`
+
+Deduplication uses `sr_number` as the unique key — keeping the newer row ensures updated records overwrite stale ones.
+
 ## Output
 
-Save to `$DATA_DIR/311_recent.csv` by default (matching what `start.sh` downloads on startup). This ensures the deployed agent's system prompt `CSV_PATH` always points to the freshest data. If the user specifies a custom filename, save alongside it in `$DATA_DIR/`.
+Save to `$DATA_DIR/311_recent.csv` (matching what `start.sh` downloads on startup). This ensures the deployed agent's system prompt `CSV_PATH` always points to the freshest data.

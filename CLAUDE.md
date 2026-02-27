@@ -95,7 +95,8 @@ npm run start
 - `agent311/pyproject.toml` + `agent311/uv.lock` — Python dependencies
 - `agent311/railpack.json` — Backend Railway build config (system packages, Claude Code CLI install step)
 - `agent311/railway.json` — Specifies Railpack builder
-- `agent311/start.sh` — Startup script (downloads year-to-date 311 data, starts uvicorn)
+- `agent311/start.sh` — Startup script (downloads/updates 311 data via `download_311.py`, starts uvicorn)
+- `agent311/agent311/download_311.py` — 311 data downloader with pagination and delta merge (dedup by `sr_number`)
 - `agent311/.python-version` — Pins Python 3.12
 - `agent311/agent311/main.py` — FastAPI app, all endpoints, SSE streaming, MCP tools
 - `agent311/agent311/db.py` — SQLAlchemy async ORM, PostgreSQL config, Session/Message models
@@ -111,7 +112,7 @@ npm run start
 ## Data & Persistent Storage
 
 - **Volume mount:** `RAILWAY_VOLUME_MOUNT_PATH` on Railway; falls back to `data/` relative to `agent311/` locally
-- **311 CSV:** `<volume>/311_recent.csv` — year-to-date, downloaded by `start.sh` on startup
+- **311 CSV:** `<volume>/311_recent.csv` — from Jan 1 of last year, downloaded/updated incrementally by `start.sh` on startup
 - **Reports:** `<volume>/reports/` — user-curated HTML/CSV/PNG reports, shown in sidebar file tree
 - **Charts:** `<volume>/analysis/charts/` — agent-generated plotly charts, previewed in artifact panel
 - The `data/` directory is gitignored — generated data should never be committed
